@@ -1,0 +1,74 @@
+{
+  "source": "raw_data/abcd_v1.1.json.gz",
+  "source_sha256": "2bdf53ac359543dcdc38d55bc6513e78df120363f8f44870716e909f4606de15",
+  "selected_intents": [
+    "return_size",
+    "return_color",
+    "return_stain",
+    "promo_code_invalid",
+    "promo_code_out_of_date",
+    "manage_cancel",
+    "manage_upgrade",
+    "manage_downgrade"
+  ],
+  "reference_labels_created": false,
+  "conversations": 1148,
+  "conversations_by_split": {
+    "train": 925,
+    "dev": 111,
+    "test": 112
+  },
+  "conversations_with_source_turn_gaps": 73,
+  "tool_cases": 4428,
+  "tool_cases_by_split": {
+    "train": 3575,
+    "dev": 437,
+    "test": 416
+  },
+  "tool_cases_by_intent": {
+    "return_size": 848,
+    "return_color": 779,
+    "manage_downgrade": 445,
+    "manage_cancel": 460,
+    "return_stain": 726,
+    "manage_upgrade": 378,
+    "promo_code_invalid": 435,
+    "promo_code_out_of_date": 357
+  },
+  "policy_cases": 847,
+  "policy_cases_by_split": {
+    "train": 684,
+    "dev": 87,
+    "test": 76
+  },
+  "policy_cases_by_intent": {
+    "return_size": 147,
+    "return_color": 123,
+    "manage_downgrade": 81,
+    "manage_cancel": 76,
+    "return_stain": 129,
+    "promo_code_invalid": 129,
+    "promo_code_out_of_date": 100,
+    "manage_upgrade": 62
+  },
+  "policy_selection_rules": {
+    "return_evidence_after_membership": 187,
+    "membership_stage": 101,
+    "order_shipping_stage": 88,
+    "order_membership_stage": 131,
+    "membership_with_prior_return_evidence": 111,
+    "promo_oracle_stage": 128,
+    "promo_membership_stage": 101
+  },
+  "policy_review_flags": {
+    "return_evidence_not_detected": 101,
+    "oracle_result_not_structured_in_scenario": 229
+  },
+  "actions_outside_selected_kb": 361,
+  "sqlite_rows": {
+    "scenarios": 1148,
+    "accounts": 1148,
+    "orders": 1148,
+    "products": 1273
+  }
+}
