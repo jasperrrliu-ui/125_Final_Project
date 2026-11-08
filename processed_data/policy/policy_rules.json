@@ -1,0 +1,939 @@
+{
+  "schema_version": "0.1",
+  "status": "draft_for_user_review",
+  "source": {
+    "file": "raw_data/guidelines.json",
+    "sha256": "d1cce8e430ab97ac6e87f6b94688ada70897b6451ceac80d324ddfbd6ce476e3"
+  },
+  "scope_intents": [
+    "return_size",
+    "return_color",
+    "return_stain",
+    "promo_code_invalid",
+    "promo_code_out_of_date",
+    "manage_cancel",
+    "manage_upgrade",
+    "manage_downgrade"
+  ],
+  "source_equivalence_checks": [
+    {
+      "subflows": [
+        "Return Due to Size",
+        "Return Due to Color",
+        "Return Due to Stain"
+      ],
+      "same_actions": true
+    },
+    {
+      "subflows": [
+        "Promo Code Invalid",
+        "Promo Code Out of Date"
+      ],
+      "same_actions": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "return_gold",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "member_level": "gold"
+      },
+      "decision": "return_allowed",
+      "details": {
+        "eligibility": "unlimited_returns"
+      },
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/text",
+          "source_text": "Confirm their order can be returned, by checking their membership level."
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/subtext/0",
+          "source_text": "Gold members: > Gold members get unlimited returns"
+        }
+      ]
+    },
+    {
+      "id": "return_silver",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "all": [
+          {
+            "member_level": "silver"
+          },
+          {
+            "any": [
+              {
+                "purchase_within": "last_6_months"
+              },
+              {
+                "has_receipt": true
+              },
+              {
+                "original_packaging": true
+              }
+            ]
+          }
+        ]
+      },
+      "decision": "return_allowed",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/text",
+          "source_text": "Confirm their order can be returned, by checking their membership level."
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/subtext/1",
+          "source_text": "Silver members: > Ask for the purchase date, return possible within the last 6 months <or> Ask if they have a receipt, get to return if user has receipt <or> Ask if in original packaging, get to return if in original packaging"
+        }
+      ]
+    },
+    {
+      "id": "return_bronze",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "all": [
+          {
+            "member_level": "bronze"
+          },
+          {
+            "any": [
+              {
+                "purchase_within": "last_90_days"
+              },
+              {
+                "has_receipt": true
+              },
+              {
+                "original_packaging": true
+              }
+            ]
+          }
+        ]
+      },
+      "decision": "return_allowed",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/text",
+          "source_text": "Confirm their order can be returned, by checking their membership level."
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/subtext/2",
+          "source_text": "Bronze members: > Ask for the purchase date, return possible within the last 90 days <or> Ask if they have a receipt, get to return if user has receipt <or> Ask if in original packaging, get to return if in original packaging"
+        }
+      ]
+    },
+    {
+      "id": "return_guest",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "all": [
+          {
+            "member_level": "guest"
+          },
+          {
+            "any": [
+              {
+                "purchase_within": "last_30_days"
+              },
+              {
+                "has_receipt": true
+              }
+            ]
+          }
+        ]
+      },
+      "decision": "return_allowed",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/text",
+          "source_text": "Confirm their order can be returned, by checking their membership level."
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/2/subtext/3",
+          "source_text": "Guest members: > Ask for the purchase date, return possible within the last 30 days <or> Ask if they have a receipt, get to return if user has receipt"
+        }
+      ]
+    },
+    {
+      "id": "return_allowed_next_steps",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "return_allowed": true
+      },
+      "decision": "collect_full_address_and_return_method",
+      "details": {
+        "return_method_options": [
+          "By Mail",
+          "In Store",
+          "Drop off Center"
+        ]
+      },
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/3/text",
+          "source_text": "Communication"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/3/subtext/0",
+          "source_text": "If the customer can return, tell them the good news and go to the next step"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/4/text",
+          "source_text": "Since the customer will print out a shipping label for the return, you need their full address.  You can give this explanation if the customer asks why you need the address."
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/4/subtext/0",
+          "source_text": "Street Number and Street Name"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/4/subtext/1",
+          "source_text": "City, State, Zip Code"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/4/subtext/2",
+          "source_text": "Fill this as one line into [Enter Details]"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/5/text",
+          "source_text": "Ask the customer how they would like to process their return:"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/5/subtext/0",
+          "source_text": "Options include: 'By Mail', 'In Store', or 'Drop off Center'"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/5/subtext/1",
+          "source_text": "Fill in the form with one of these three values and submit to [Update Order]"
+        }
+      ]
+    },
+    {
+      "id": "return_not_allowed",
+      "applies_to": [
+        "return_size",
+        "return_color",
+        "return_stain"
+      ],
+      "when": {
+        "return_allowed": false
+      },
+      "decision": "explain_and_end",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/3/text",
+          "source_text": "Communication"
+        },
+        {
+          "source_path": "Product Defect/subflows/Return Due to Size/actions/3/subtext/1",
+          "source_text": "If the customer cannot return, apologize and explain the problem. Then [End Conversation]"
+        }
+      ]
+    },
+    {
+      "id": "promo_more_than_seven_days",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "promo_code_age_days": {
+          "gt": 7
+        }
+      },
+      "decision": "classify_out_of_date",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/1/text",
+          "source_text": "Typically promotions only last 7 days so check if the code was issued a long time ago.   That might be the reason it doesn’t work."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/1/subtext/0",
+          "source_text": "If the promo code is more than 7 days, then the correct subflow is 'out of date', otherwise, the correct subflow is 'invalid'"
+        }
+      ]
+    },
+    {
+      "id": "promo_not_more_than_seven_days",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "promo_code_age_days": {
+          "lte": 7
+        }
+      },
+      "decision": "classify_invalid",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/1/text",
+          "source_text": "Typically promotions only last 7 days so check if the code was issued a long time ago.   That might be the reason it doesn’t work."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/1/subtext/0",
+          "source_text": "If the promo code is more than 7 days, then the correct subflow is 'out of date', otherwise, the correct subflow is 'invalid'"
+        }
+      ]
+    },
+    {
+      "id": "promo_oracle_customer_right",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "oracle_customer_right": true
+      },
+      "decision": "generate_promo_code",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/2/text",
+          "source_text": "To decide whether or not this is a valid error:"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/2/subtext/1",
+          "source_text": "Then [Ask the Oracle] if the customer made an error, which will return Yes or No"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/2/subtext/2",
+          "source_text": "Make sure to explain the result in natural language."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/2/subtext/3",
+          "source_text": "If the customer is right (Oracle says Yes), skip to the Promo Code step below"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/text",
+          "source_text": "Generate the promo code and share that with them"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/subtext/0",
+          "source_text": "No need to enter anything into the form."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/subtext/1",
+          "source_text": "Click on [Promo Code]"
+        }
+      ]
+    },
+    {
+      "id": "promo_oracle_customer_wrong_member",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "all": [
+          {
+            "oracle_customer_right": false
+          },
+          {
+            "member_level": {
+              "in": [
+                "bronze",
+                "silver",
+                "gold"
+              ]
+            }
+          }
+        ]
+      },
+      "decision": "generate_promo_code",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/text",
+          "source_text": "If the customer is wrong (Oracle says No), then:"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/0",
+          "source_text": "Ask the customer for their membership level."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/1",
+          "source_text": "Enter the member level (even if just a Guest) into [Membership Privileges] and submit."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/2",
+          "source_text": "Gold, Silver and Bronze all qualify. > The idea here is that even if their promo code is not valid for whatever reason, we will generate a new one for them because they are a valued member."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/text",
+          "source_text": "Generate the promo code and share that with them"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/subtext/0",
+          "source_text": "No need to enter anything into the form."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/subtext/1",
+          "source_text": "Click on [Promo Code]"
+        }
+      ]
+    },
+    {
+      "id": "promo_oracle_customer_wrong_guest",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "all": [
+          {
+            "oracle_customer_right": false
+          },
+          {
+            "member_level": "guest"
+          }
+        ]
+      },
+      "decision": "apologize_no_promo_code",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/text",
+          "source_text": "If the customer is wrong (Oracle says No), then:"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/0",
+          "source_text": "Ask the customer for their membership level."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/1",
+          "source_text": "Enter the member level (even if just a Guest) into [Membership Privileges] and submit."
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/3",
+          "source_text": "Guest > If they are just a regular user, then apologize that you cannot help them because there is nothing you can do"
+        }
+      ]
+    },
+    {
+      "id": "promo_if_customer_asks_value",
+      "applies_to": [
+        "promo_code_invalid",
+        "promo_code_out_of_date"
+      ],
+      "when": {
+        "customer_asks_promo_value": true
+      },
+      "decision": "say_20_percent_off_next_purchase",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/text",
+          "source_text": "Generate the promo code and share that with them"
+        },
+        {
+          "source_path": "Purchase Dispute/subflows/Promo Code Invalid/actions/4/subtext/2",
+          "source_text": "If the customer asks, you can say it is for 20% off their next purchase."
+        }
+      ]
+    },
+    {
+      "id": "cancel_order_received",
+      "applies_to": [
+        "manage_cancel"
+      ],
+      "when": {
+        "shipping_status": "Order Received"
+      },
+      "decision": "remove_unwanted_item_and_refund_now",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/subtext/0",
+          "source_text": "Ask customer for the shipping status and then submit using [Shipping Status]"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/subtext/1",
+          "source_text": "If the item is Order Received, then immediately offer the refund and tell the customer the unwanted item has been removed from their order."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/text",
+          "source_text": "Find out how much the item cost that is meant to be returned"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/subtext/0",
+          "source_text": "Enter the amount in the box"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/subtext/1",
+          "source_text": "Select the [Offer Refund] option"
+        }
+      ]
+    },
+    {
+      "id": "cancel_shipped_member",
+      "applies_to": [
+        "manage_cancel"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": {
+              "in": [
+                "In Transit",
+                "Out for Delivery",
+                "Delivered"
+              ]
+            }
+          },
+          {
+            "member_level": {
+              "in": [
+                "bronze",
+                "silver",
+                "gold"
+              ]
+            }
+          }
+        ]
+      },
+      "decision": "refund_now_customer_calls_back_for_return_label_after_arrival",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/subtext/2",
+          "source_text": "If the item is 'In Transit', 'Out for Delivery' or 'Delivered' then check their membership level (next step)."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/3/text",
+          "source_text": "Ask the customer for their membership level."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/3/subtext/0",
+          "source_text": "If they are bronze, silver or gold: > Enter Gold or Silver, depending on the level into the text box > Click the [Membership Privileges] option > Tell them you can offer a refund immediately.  After the item arrives, the customer should then call back to customer support to get the shipping label for return."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/text",
+          "source_text": "Find out how much the item cost that is meant to be returned"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/subtext/0",
+          "source_text": "Enter the amount in the box"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/4/subtext/1",
+          "source_text": "Select the [Offer Refund] option"
+        }
+      ]
+    },
+    {
+      "id": "cancel_shipped_guest",
+      "applies_to": [
+        "manage_cancel"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": {
+              "in": [
+                "In Transit",
+                "Out for Delivery",
+                "Delivered"
+              ]
+            }
+          },
+          {
+            "member_level": "guest"
+          }
+        ]
+      },
+      "decision": "wait_until_arrival_then_call_to_start_return",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/2/subtext/2",
+          "source_text": "If the item is 'In Transit', 'Out for Delivery' or 'Delivered' then check their membership level (next step)."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/3/text",
+          "source_text": "Ask the customer for their membership level."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Cancel/actions/3/subtext/1",
+          "source_text": "If they are a Guest customer, then they must wait until the item arrives and call back to customer support to start the return process. [End Conversation] after communicating the above."
+        }
+      ]
+    },
+    {
+      "id": "upgrade_already_shipped",
+      "applies_to": [
+        "manage_upgrade"
+      ],
+      "when": {
+        "shipping_status": {
+          "in": [
+            "In Transit",
+            "Out for Delivery",
+            "Delivered"
+          ]
+        }
+      },
+      "decision": "cannot_change_shipping_date_explain_and_end",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/subtext/0",
+          "source_text": "Ask for the shipping status from customer, and enter into [Shipping Status] > Possible options: ['Order Received', 'In Transit', 'Out for Delivery', 'Delivered']"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/subtext/2",
+          "source_text": "If the item is 'In Transit', 'Out for Delivery', or 'Delivered' then it is too late > The item has already shipped and the date cannot be altered > However, this means the item will likely arrive today or tomorrow anyway > Explain this to the customer and [End Conversation]"
+        }
+      ]
+    },
+    {
+      "id": "upgrade_gold_order_received",
+      "applies_to": [
+        "manage_upgrade"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": "Order Received"
+          },
+          {
+            "member_level": "gold"
+          }
+        ]
+      },
+      "decision": "waive_fee_and_update_delivery_to_tomorrow",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/subtext/1",
+          "source_text": "If the item is 'Order Received' > Then the company has received the order, but the item has not yet shipped > Move onto the next step"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/text",
+          "source_text": "Find out how much the extra fee will be for upgraded overnight shipping"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/subtext/0",
+          "source_text": "Ask the customer for their membership level.  Type it into the field and then select the [Membership Privileges] option."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/subtext/1",
+          "source_text": "Gold members: > Gold members have their fee waived"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/4/text",
+          "source_text": "Finally, you want to upgrade their shipping time."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/4/subtext/0",
+          "source_text": "Enter 'tomorrow' and then select [Update Order]"
+        }
+      ]
+    },
+    {
+      "id": "upgrade_non_gold_order_received",
+      "applies_to": [
+        "manage_upgrade"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": "Order Received"
+          },
+          {
+            "member_level": {
+              "in": [
+                "guest",
+                "bronze",
+                "silver"
+              ]
+            }
+          }
+        ]
+      },
+      "decision": "ask_permission_to_charge_20_usd",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/2/subtext/1",
+          "source_text": "If the item is 'Order Received' > Then the company has received the order, but the item has not yet shipped > Move onto the next step"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/text",
+          "source_text": "Find out how much the extra fee will be for upgraded overnight shipping"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/subtext/0",
+          "source_text": "Ask the customer for their membership level.  Type it into the field and then select the [Membership Privileges] option."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/subtext/2",
+          "source_text": "Guest, Bronze or Silver members: > Ask them if they can charge $20 to the credit card on their account > The answer should be yes, since that is the only way to pay"
+        }
+      ]
+    },
+    {
+      "id": "upgrade_non_gold_after_permission",
+      "applies_to": [
+        "manage_upgrade"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": "Order Received"
+          },
+          {
+            "member_level": {
+              "in": [
+                "guest",
+                "bronze",
+                "silver"
+              ]
+            }
+          },
+          {
+            "customer_authorizes_20_usd_charge": true
+          }
+        ]
+      },
+      "decision": "update_delivery_to_tomorrow",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/text",
+          "source_text": "Find out how much the extra fee will be for upgraded overnight shipping"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/3/subtext/2",
+          "source_text": "Guest, Bronze or Silver members: > Ask them if they can charge $20 to the credit card on their account > The answer should be yes, since that is the only way to pay"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/4/text",
+          "source_text": "Finally, you want to upgrade their shipping time."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Upgrade/actions/4/subtext/0",
+          "source_text": "Enter 'tomorrow' and then select [Update Order]"
+        }
+      ]
+    },
+    {
+      "id": "downgrade_order_received",
+      "applies_to": [
+        "manage_downgrade"
+      ],
+      "when": {
+        "shipping_status": "Order Received"
+      },
+      "decision": "update_delivery_to_next_week",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/subtext/0",
+          "source_text": "Ask for the shipping status from customer, and enter into [Shipping Status] > Possible options: ['Order Received', 'In Transit', 'Out for Delivery', 'Delivered']"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/subtext/1",
+          "source_text": "If the item is 'Order Received' > Then the company has received the order, but the item has not yet shipped > Move onto the next step"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/text",
+          "source_text": "Determine how to manage the shipping cost"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/0",
+          "source_text": "Find the membership level and enter into [Membership Privileges]"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/1",
+          "source_text": "If Gold, Silver or Bronze: > If not yet shipped, tell the customer you can delay the shipping date with no problem.  Then head to the next step. > If already shipped, tell the customer you can add a credit back to their account for the amount of the shipping fee.  Then  [End Conversation]"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/2",
+          "source_text": "If Guest member: > If not yet shipped, tell the customer you can delay the shipping date with no problem.  Then head to the next step. > If already shipped, tell the customer there is nothing you can do.  Apologize for any inconvenience and [End Conversation]"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/4/text",
+          "source_text": "If the item has not yet been shipped, then you can change it"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/4/subtext/0",
+          "source_text": "Enter 'next week' into the field and [Update Order]"
+        }
+      ]
+    },
+    {
+      "id": "downgrade_shipped_member",
+      "applies_to": [
+        "manage_downgrade"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": {
+              "in": [
+                "In Transit",
+                "Out for Delivery",
+                "Delivered"
+              ]
+            }
+          },
+          {
+            "member_level": {
+              "in": [
+                "bronze",
+                "silver",
+                "gold"
+              ]
+            }
+          }
+        ]
+      },
+      "decision": "add_account_credit_for_shipping_fee_and_end",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/subtext/2",
+          "source_text": "If the item is 'In Transit', 'Out for Delivery', or 'Delivered' then it is too late > The item has already shipped and the date cannot be altered > Then move onto the next step"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/text",
+          "source_text": "Determine how to manage the shipping cost"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/0",
+          "source_text": "Find the membership level and enter into [Membership Privileges]"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/1",
+          "source_text": "If Gold, Silver or Bronze: > If not yet shipped, tell the customer you can delay the shipping date with no problem.  Then head to the next step. > If already shipped, tell the customer you can add a credit back to their account for the amount of the shipping fee.  Then  [End Conversation]"
+        }
+      ]
+    },
+    {
+      "id": "downgrade_shipped_guest",
+      "applies_to": [
+        "manage_downgrade"
+      ],
+      "when": {
+        "all": [
+          {
+            "shipping_status": {
+              "in": [
+                "In Transit",
+                "Out for Delivery",
+                "Delivered"
+              ]
+            }
+          },
+          {
+            "member_level": "guest"
+          }
+        ]
+      },
+      "decision": "apologize_no_change_and_end",
+      "origin": "abcd_guidelines",
+      "evidence": [
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/text",
+          "source_text": "Find out whether the item has already shipped."
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/2/subtext/2",
+          "source_text": "If the item is 'In Transit', 'Out for Delivery', or 'Delivered' then it is too late > The item has already shipped and the date cannot be altered > Then move onto the next step"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/text",
+          "source_text": "Determine how to manage the shipping cost"
+        },
+        {
+          "source_path": "Order Issue/subflows/Manage Downgrade/actions/3/subtext/2",
+          "source_text": "If Guest member: > If not yet shipped, tell the customer you can delay the shipping date with no problem.  Then head to the next step. > If already shipped, tell the customer there is nothing you can do.  Apologize for any inconvenience and [End Conversation]"
+        }
+      ]
+    }
+  ],
+  "unresolved_source_issues": [
+    {
+      "id": "date_boundaries",
+      "note": "The source says 'last 6 months', 'last 90 days', and 'last 30 days' without specifying boundary inclusivity or evaluation clock."
+    },
+    {
+      "id": "oracle_yes_no_wording",
+      "note": "The promo instructions ask whether the customer made an error, then say 'customer is right (Oracle says Yes)'. The direction of the Boolean is inconsistent."
+    },
+    {
+      "id": "cancel_bronze_input",
+      "note": "The cancel branch includes bronze members, then says to enter 'Gold or Silver, depending on the level'. This does not describe what to enter for bronze."
+    },
+    {
+      "id": "upgrade_payment_refusal",
+      "note": "The source asks permission to charge $20 and says the answer 'should be yes'; it does not specify a refusal branch."
+    },
+    {
+      "id": "promo_issuance_authority",
+      "note": "ABCD instructs the representative to generate a promo code. It does not model a merchant-owned coupon service or identify its issuer."
+    }
+  ]
+}

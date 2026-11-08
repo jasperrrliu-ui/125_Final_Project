@@ -1,0 +1,26 @@
+{
+  "seed": 1252026,
+  "source_file": "raw_data/abcd_v1.1.json.gz",
+  "source_sha256": "2bdf53ac359543dcdc38d55bc6513e78df120363f8f44870716e909f4606de15",
+  "source_selected_conversations": 1148,
+  "customers": 808,
+  "customer_request_count_distribution": {
+    "3": 80,
+    "1": 548,
+    "2": 180
+  },
+  "multi_request_case_candidates": 32,
+  "splits": {
+    "train": 652,
+    "test": 78,
+    "dev": 78
+  },
+  "missing_shipping_status": 789,
+  "source_dialogues_with_non_profile_email": 44,
+  "source_identity_leaks": [],
+  "notes": [
+    "Only identity values are synthetic; membership tier is held constant inside each linked customer.",
+    "ABCD conversations are separate historical role-play chats; multi_request_cases are new synthetic single-message tasks, not historical transcripts.",
+    "No reference labels are assigned. Generated JSONL and SQLite are checked into processed_data."
+  ]
+}

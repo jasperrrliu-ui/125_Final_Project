@@ -2,13 +2,15 @@
 
 These files are generated from the unchanged ABCD source with
 `python scripts/prepare_test_cases.py`. They cover the eight intents listed in
-`manifest.json`. Run `python -m unittest discover -s tests -v` after rebuilding.
+`manifest.json`. See the [processed-data guide](../README.md) for how these
+case-isolated fixtures differ from the linked 808-customer simulation. Run
+`python -m unittest -q tests.test_prepared_cases` after rebuilding.
 
 | File | Purpose |
 | --- | --- |
 | `conversations.jsonl` | Original chat turns, normalized with positional turn numbers. |
 | `scenario_fixtures.jsonl` | Account, order, and product facts extracted from each raw `scenario`. |
-| `scenario_fixtures.sqlite` | Local SQLite copy of those facts, built using `sql/scenario_schema.sql`; ignored by Git and recreated by the script. |
+| `scenario_fixtures.sqlite` | Checked-in SQLite copy of those facts, built using `sql/scenario_schema.sql`; reproducible by the script. |
 | `tool_cases.jsonl` | Cut immediately before an observed, in-scope action. |
 | `policy_cases.jsonl` | Cut after a policy-relevant piece of evidence or action. |
 | `manifest.json` | Source hash, counts, and review flags. |

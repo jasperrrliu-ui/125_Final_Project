@@ -15,7 +15,7 @@ from prepare_test_cases import materialize_agent_input  # noqa: E402
 
 
 def rows(name: str) -> list[dict]:
-    path = ROOT / "prepared_data" / name
+    path = ROOT / "processed_data" / "abcd_cases" / name
     with path.open("r", encoding="utf-8") as handle:
         return [json.loads(line) for line in handle]
 
@@ -55,7 +55,7 @@ class PreparedCaseTests(unittest.TestCase):
         self.assertEqual(by_conversation[2225]["cutoff_after_turn"], 17)
 
     def test_sqlite_preserves_per_conversation_isolation(self) -> None:
-        with sqlite3.connect(ROOT / "prepared_data" / "scenario_fixtures.sqlite") as connection:
+        with sqlite3.connect(ROOT / "processed_data" / "abcd_cases" / "scenario_fixtures.sqlite") as connection:
             count = connection.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0]
             self.assertEqual(count, len(self.conversations))
             self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])

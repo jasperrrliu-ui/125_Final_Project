@@ -1,0 +1,26 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	understand(understand)
+	route(route)
+	query(query)
+	propose(propose)
+	authorize(authorize)
+	reply(reply)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> understand;
+	authorize --> route;
+	propose --> authorize;
+	query --> route;
+	route -.-> propose;
+	route -.-> query;
+	route -.-> reply;
+	understand --> route;
+	reply --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

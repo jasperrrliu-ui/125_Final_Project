@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retail-agent-course-demo"
+version = "0.1.0"
+description = "ABCD-derived retail customer service agent course project"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "langgraph>=1,<2",
+    "langgraph-checkpoint-sqlite>=3,<4",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27,<1"]
+llm = ["langchain-openai>=1,<2"]
+
+[tool.setuptools.packages.find]
+include = ["agent*"]

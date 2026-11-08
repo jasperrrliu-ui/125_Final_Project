@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 *.sqlite
 *.sqlite3
+!processed_data/abcd_cases/scenario_fixtures.sqlite
+!processed_data/customer_simulation/synthetic_retail.sqlite
+outputs/
+*.egg-info/

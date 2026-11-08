@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = ROOT / "raw_data" / "abcd_v1.1.json.gz"
 KB_PATH = ROOT / "raw_data" / "kb.json"
 SCHEMA_PATH = ROOT / "sql" / "scenario_schema.sql"
-OUTPUT_DIR = ROOT / "prepared_data"
+OUTPUT_DIR = ROOT / "processed_data" / "abcd_cases"
 SPLITS = ("train", "dev", "test")
 INTENTS = (
     "return_size",
