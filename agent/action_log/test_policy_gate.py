@@ -1,11 +1,15 @@
-"""Check that source policy and re-read DB facts control simulated actions."""
+"""The gate re-reads records, re-runs the policy, and only records what it allows."""
 
 from pathlib import Path
 import tempfile
 import unittest
 
-from agent.action_log.action_ledger import ActionLedger, ActionProposal
-from agent.action_log.policy_gate import PolicyGate, TrustedContext
+from agent.action_log.action_ledger import ActionLedger
+from agent.action_log.policy_gate import AuthorizationRequest, PolicyGate
+
+
+CANCEL_OPTION = {"option_id": "cancel_and_refund", "action": "cancel_item_and_refund",
+                 "payload": {"item_index": 0, "amount_cents": 8400}}
 
 
 class PolicyGateTests(unittest.TestCase):
@@ -15,111 +19,70 @@ class PolicyGateTests(unittest.TestCase):
         self.ledger = ActionLedger(Path(self.temp.name) / "actions.sqlite")
         self.gate = PolicyGate(self.ledger)
 
-    def proposal(self, case: str, intent: str, action: str,
-                 customer: str, order: str, payload: dict) -> ActionProposal:
-        return ActionProposal("conversation-test", case, intent, action,
-                              customer, order, payload)
+    def request(self, key, **overrides):
+        values = dict(conversation_id="conv", request_key=key, intent="manage_cancel",
+                      customer_id="C0300", order_id="0066041981", item_index=0,
+                      option=CANCEL_OPTION, confirmed=True)
+        values.update(overrides)
+        return AuthorizationRequest(**values)
 
-    def test_received_order_can_cancel_only_its_actual_item_amount(self):
-        good = self.proposal("cancel-good", "manage_cancel", "cancel_item_and_refund",
-                             "C0300", "0066041981",
-                             {"item_index": 0, "amount_cents": 8400})
-        self.assertEqual(self.gate.review_and_record(good, TrustedContext("C0300"))["outcome"],
-                         "simulated")
-        inflated = self.proposal("cancel-inflated", "manage_cancel", "cancel_item_and_refund",
-                                 "C0300", "0066041981",
-                                 {"item_index": 0, "amount_cents": 9900})
-        self.assertEqual(self.gate.review_and_record(inflated, TrustedContext("C0300"))["outcome"],
-                         "blocked")
+    def test_confirmed_allowed_option_is_simulated(self):
+        result = self.gate.authorize(self.request("ok"))
+        self.assertEqual((result["outcome"], result["policy_rule_id"]),
+                         ("simulated", "cancel_order_received"))
 
-    def test_wrong_customer_and_missing_shipping_status_block(self):
-        wrong = self.proposal("wrong-owner", "manage_cancel", "cancel_item_and_refund",
-                              "C0300", "0066041981",
-                              {"item_index": 0, "amount_cents": 8400})
-        result = self.gate.review_and_record(wrong, TrustedContext("C0002"))
-        self.assertEqual(result["outcome"], "blocked")
-        missing = self.proposal("missing-status", "manage_cancel", "cancel_item_and_refund",
-                                "C0001", "5199420931",
-                                {"item_index": 0, "amount_cents": 5900})
-        result = self.gate.review_and_record(missing, TrustedContext("C0001"))
-        self.assertEqual(result["outcome"], "blocked")
-        self.assertEqual(result["reason_code"], "shipping_status_missing")
+    def test_unconfirmed_option_is_blocked(self):
+        result = self.gate.authorize(self.request("unconfirmed", confirmed=False))
+        self.assertEqual((result["outcome"], result["reason_code"]),
+                         ("blocked", "customer_confirmation_missing"))
 
-    def test_shipped_member_gets_refund_but_shipped_guest_does_not(self):
-        member = self.proposal("shipped-member", "manage_cancel", "refund_item",
-                               "C0414", "0138162349",
-                               {"item_index": 0, "amount_cents": 8900})
-        self.assertEqual(self.gate.review_and_record(member, TrustedContext("C0414"))["outcome"],
-                         "simulated")
-        guest = self.proposal("shipped-guest", "manage_cancel", "refund_item",
-                              "C0478", "0404012051",
-                              {"item_index": 0, "amount_cents": 5900})
-        result = self.gate.review_and_record(guest, TrustedContext("C0478"))
-        self.assertEqual(result["outcome"], "blocked")
-        self.assertEqual(result["reason_code"], "shipped_guest_wait_for_arrival")
-        bronze = self.proposal("shipped-bronze", "manage_cancel", "refund_item",
-                               "C0485", "0331458736",
-                               {"item_index": 0, "amount_cents": 6400})
-        result = self.gate.review_and_record(bronze, TrustedContext("C0485"))
-        self.assertEqual(result["reason_code"], "cancel_bronze_source_ambiguity")
+    def test_tampered_amount_is_blocked(self):
+        inflated = {**CANCEL_OPTION, "payload": {"item_index": 0, "amount_cents": 9900}}
+        result = self.gate.authorize(self.request("inflated", option=inflated))
+        self.assertEqual((result["outcome"], result["reason_code"]),
+                         ("blocked", "policy_gate_mismatch"))
 
-    def test_upgrade_gold_and_non_gold_consent(self):
-        gold = self.proposal("upgrade-gold", "manage_upgrade", "reschedule_delivery",
-                             "C0007", "7027853016", {"delivery_window": "tomorrow"})
-        self.assertEqual(self.gate.review_and_record(gold, TrustedContext("C0007"))["outcome"],
-                         "simulated")
-        non_gold = self.proposal("upgrade-guest-no-consent", "manage_upgrade",
-                                 "reschedule_delivery", "C0300", "0066041981",
-                                 {"delivery_window": "tomorrow", "charge_amount_cents": 2000})
-        self.assertEqual(self.gate.review_and_record(non_gold, TrustedContext("C0300"))["outcome"],
-                         "blocked")
-        consented = self.proposal("upgrade-guest-consent", "manage_upgrade",
-                                  "reschedule_delivery", "C0300", "0066041981",
-                                  {"delivery_window": "tomorrow", "charge_amount_cents": 2000})
-        context = TrustedContext("C0300", authorized_20_usd_charge=True)
-        self.assertEqual(self.gate.review_and_record(consented, context)["outcome"],
-                         "simulated")
+    def test_other_customers_order_is_blocked(self):
+        result = self.gate.authorize(self.request("foreign", customer_id="C0002"))
+        self.assertEqual((result["outcome"], result["reason_code"]),
+                         ("blocked", "order_not_verified"))
 
-    def test_downgrade_and_unverified_shipping_fee(self):
-        received = self.proposal("downgrade-received", "manage_downgrade",
-                                 "reschedule_delivery", "C0300", "0066041981",
-                                 {"delivery_window": "next_week"})
-        self.assertEqual(self.gate.review_and_record(received, TrustedContext("C0300"))["outcome"],
-                         "simulated")
-        shipped = self.proposal("downgrade-shipped", "manage_downgrade",
-                                "credit_shipping_fee", "C0414", "0138162349",
-                                {"amount_cents": 500})
-        result = self.gate.review_and_record(shipped, TrustedContext("C0414"))
-        self.assertEqual(result["outcome"], "blocked")
-        self.assertEqual(result["reason_code"], "shipping_fee_unavailable")
+    def test_option_not_allowed_by_current_policy_is_blocked(self):
+        refund = {"option_id": "refund_now", "action": "refund_item",
+                  "payload": {"item_index": 0, "amount_cents": 8400}}
+        result = self.gate.authorize(self.request("wrong-option", option=refund))
+        self.assertEqual((result["outcome"], result["reason_code"]),
+                         ("blocked", "option_not_allowed"))
 
-    def test_return_requires_source_eligibility_and_confirmed_details(self):
-        proposed = self.proposal("return-missing-confirmation", "return_size",
-                                 "initiate_return", "C0001", "5199420931",
-                                 {"item_index": 0, "return_method": "by_mail",
-                                  "address_confirmed": True})
-        result = self.gate.review_and_record(proposed, TrustedContext("C0001"))
-        self.assertEqual(result["reason_code"], "return_details_not_confirmed")
-        confirmed = self.proposal("return-confirmed", "return_size",
-                                  "initiate_return", "C0001", "5199420931",
-                                  {"item_index": 0, "return_method": "by_mail",
-                                   "address_confirmed": True})
-        context = TrustedContext("C0001", return_address={
-                                     "street": "1 Test Street", "city": "Boston",
-                                     "state": "MA", "zip_code": "02101"},
-                                 return_address_confirmed=True,
-                                 return_method_confirmed="by_mail")
-        result = self.gate.review_and_record(confirmed, context)
-        self.assertEqual(result["outcome"], "simulated")
-        self.assertEqual(result["policy_rule_id"], "return_silver")
+    def test_customer_fact_change_is_rechecked(self):
+        # Silver, packaging "no", bought 2019-08-22: eligible only with a receipt.
+        option = {"option_id": "return_by_mail", "action": "initiate_return",
+                  "payload": {"item_index": 0, "return_method": "by_mail",
+                              "address_confirmed": True}}
+        base = dict(intent="return_color", customer_id="C0107", order_id="5110435718",
+                    option=option)
+        allowed = self.gate.authorize(self.request("receipt", customer_facts={"has_receipt": True},
+                                                   **base))
+        self.assertEqual(allowed["outcome"], "simulated")
+        denied = self.gate.authorize(self.request("no-receipt", customer_facts={"has_receipt": False},
+                                                  **base))
+        self.assertEqual((denied["outcome"], denied["reason_code"]),
+                         ("blocked", "policy_decision_decline"))
 
-    def test_coupon_issuance_has_no_permission_yet(self):
-        proposed = self.proposal("promo-unavailable", "promo_code_invalid",
-                                 "refund_item", "C0001", "5199420931",
-                                 {"item_index": 0, "amount_cents": 5900})
-        auth = self.gate.review(proposed, TrustedContext("C0001"))
-        self.assertIsNone(auth.allowed_action)
-        self.assertEqual(auth.denial_reason, "coupon_issuance_not_implemented")
+    def test_promo_code_is_orderless(self):
+        option = {"option_id": "issue_code_goodwill", "action": "issue_promo_code",
+                  "payload": {"discount_percent": 20}}
+        result = self.gate.authorize(self.request(
+            "promo", intent="promo_code_invalid", customer_id="C0001", order_id=None,
+            item_index=None, option=option, coupon_result={"status": "not_found"}))
+        self.assertEqual((result["outcome"], result["order_id"]), ("simulated", None))
+
+    def test_record_outcome_carries_policy_version(self):
+        result = self.gate.record_outcome(outcome="declined", conversation_id="conv",
+                                          request_id="d1", intent="manage_upgrade",
+                                          reason_code="already_shipped")
+        self.assertEqual(result["outcome"], "declined")
+        self.assertEqual(result["policy_version"], self.gate.version)
 
 
 if __name__ == "__main__":

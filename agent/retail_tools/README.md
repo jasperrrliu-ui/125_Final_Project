@@ -6,6 +6,13 @@ identity-authentication system. The LangGraph workflow decides when to ask
 for missing clues and when to call the functions.
 
 ```python
+customer = verify_customer({"email": "eli.gray.0001@example.test"})
+# or verify_customer({"full_name": "Eli Gray", "zip_code": "97297"})
+# {'status': 'found', 'customer_id': 'C0001', 'member_level': 'silver'}
+# Which field combinations are enough is decided by the policy
+# (identity.methods), not by this function. lookup_customer remains for
+# single-field lookups.
+
 customer = lookup_customer("account_id", "ACCT-000001")
 # {'status': 'found', 'customer_id': 'C0001', 'member_level': 'silver'}
 
@@ -16,8 +23,8 @@ order = lookup_order(customer["customer_id"], "5199420931")
 
 An order belonging to another customer returns `not_found`, just like an
 unknown order. Missing shipping status remains `null`; the tool does not guess
-that the order has not shipped. No raw customer profile, test-case ID, or
-address is returned. The functions use parameterized queries and open the
+that the order has not shipped. The order's shipping address is returned so the agent can
+confirm it for returns; no raw customer profile or test-case ID is returned. The functions use parameterized queries and open the
 fixture in SQLite read-only mode.
 
 Run from the repository root: `python -m unittest -v agent.retail_tools.test_read_tools`.

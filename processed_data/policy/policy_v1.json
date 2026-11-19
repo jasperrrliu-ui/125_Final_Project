@@ -1,0 +1,380 @@
+{
+  "policy_id": "retail_policy_v1",
+  "version": "1.0.0",
+  "status": "draft_for_review",
+  "as_of": "2020-04-01",
+  "as_of_note": "Fixed evaluation clock. Synthetic purchase dates run from 2019-07-06 to 2020-03-30, so this date gives each return window (30 days, 90 days, 6 months) both eligible and ineligible orders.",
+  "provenance_legend": {
+    "abcd": "Transcribed from raw_data/guidelines.json; the path is in the rule's provenance field.",
+    "tau_bench": "General rule modeled on the public tau-bench retail policy (Sierra, 2024).",
+    "assumption": "Business assumption added for this project; needs review."
+  },
+
+  "general_rules": [
+    {
+      "id": "G1_identity",
+      "text": "Before looking up any order or coupon, verify the customer with the email on the account, or with full name plus a zip code used on one of their orders. An account ID alone is not enough.",
+      "provenance": ["tau_bench", "assumption"]
+    },
+    {
+      "id": "G2_one_customer",
+      "text": "Serve one verified customer per conversation. A customer may raise several requests; handle them one at a time.",
+      "provenance": ["tau_bench"]
+    },
+    {
+      "id": "G3_confirmation",
+      "text": "Before any action that changes an order, a payment, or an account, describe the exact action and get an explicit yes from the customer.",
+      "provenance": ["tau_bench"]
+    },
+    {
+      "id": "G4_decline_vs_handoff",
+      "text": "If this policy says a request cannot be granted, explain why and close the request. Transfer to a human agent only when the request is outside the supported request types, a required fact cannot be obtained, or the systems disagree.",
+      "provenance": ["tau_bench", "abcd"]
+    },
+    {
+      "id": "G5_no_invention",
+      "text": "Never invent an order ID, coupon code, amount, date, or eligibility fact. System records take priority over what the customer says.",
+      "provenance": ["tau_bench", "assumption"]
+    }
+  ],
+
+  "identity": {
+    "methods": [["email"], ["full_name", "zip_code"]],
+    "question": "To verify your identity, please give me the email on your account, or your full name and the zip code on your order."
+  },
+
+  "facts": {
+    "member_level": {
+      "sources": ["system:customer"],
+      "description": "Membership tier from the verified account."
+    },
+    "shipping_status": {
+      "sources": ["system:order"],
+      "description": "Order shipping status. ABCD asked the customer; v1 trusts only the order system.",
+      "provenance": ["assumption"]
+    },
+    "purchase_date": {
+      "sources": ["system:order", "customer"],
+      "question": "When did you buy this item? A date is fine, for example 2020-02-15.",
+      "description": "Purchase date. Order system first; the customer's statement only if the system has none."
+    },
+    "original_packaging": {
+      "sources": ["system:order", "customer"],
+      "question": "Is the item still in its original packaging?"
+    },
+    "has_receipt": {
+      "sources": ["customer"],
+      "question": "Do you still have the receipt for this purchase?",
+      "description": "Receipts are not stored, so this is always the customer's statement, recorded with source=customer.",
+      "provenance": ["abcd", "assumption"]
+    },
+    "oracle_customer_right": {
+      "sources": ["system:coupon_check"],
+      "description": "Coupon Oracle verdict: true means the platform rejected a valid coupon."
+    }
+  },
+
+  "constants": {
+    "shipped_statuses": ["in transit", "out for delivery", "delivered"],
+    "members": ["bronze", "silver", "gold"],
+    "upgrade_fee_cents": 2000,
+    "standard_shipping_fee_cents": 800,
+    "promo_discount_percent": 20
+  },
+
+  "intent_families": {
+    "return": ["return_size", "return_color", "return_stain"],
+    "cancel": ["manage_cancel"],
+    "upgrade": ["manage_upgrade"],
+    "downgrade": ["manage_downgrade"],
+    "promo": ["promo_code_invalid", "promo_code_out_of_date"]
+  },
+
+  "option_templates": {
+    "return_methods": [
+      {
+        "option_id": "return_by_mail",
+        "action": "initiate_return",
+        "payload": {"item_index": "$item.item_index", "return_method": "by_mail", "address_confirmed": true},
+        "summary": "Return the {item_name} by mail. A prepaid label goes to {address}."
+      },
+      {
+        "option_id": "return_in_store",
+        "action": "initiate_return",
+        "payload": {"item_index": "$item.item_index", "return_method": "in_store", "address_confirmed": true},
+        "summary": "Return the {item_name} at a store. The return is registered to {address}."
+      },
+      {
+        "option_id": "return_drop_off",
+        "action": "initiate_return",
+        "payload": {"item_index": "$item.item_index", "return_method": "drop_off_center", "address_confirmed": true},
+        "summary": "Return the {item_name} at a drop-off center. The return is registered to {address}."
+      }
+    ]
+  },
+
+  "families": {
+    "return": {
+      "targets": ["order_id", "item"],
+      "rules": [
+        {
+          "id": "return_gold",
+          "when": {"fact": "member_level", "eq": "gold"},
+          "outcome": {"type": "options", "options_from": "return_methods"},
+          "text": "Gold members can return any item.",
+          "provenance": ["abcd:Product Defect/subflows/Return Due to Size/actions/2/subtext/0"]
+        },
+        {
+          "id": "return_silver",
+          "when": {"all": [
+            {"fact": "member_level", "eq": "silver"},
+            {"any": [
+              {"fact": "purchase_date", "within_months": 6},
+              {"fact": "original_packaging", "eq": true},
+              {"fact": "has_receipt", "eq": true}
+            ]}
+          ]},
+          "outcome": {"type": "options", "options_from": "return_methods"},
+          "text": "Silver members can return within 6 months of purchase, or with a receipt, or in original packaging.",
+          "provenance": ["abcd:Product Defect/subflows/Return Due to Size/actions/2/subtext/1"]
+        },
+        {
+          "id": "return_bronze",
+          "when": {"all": [
+            {"fact": "member_level", "eq": "bronze"},
+            {"any": [
+              {"fact": "purchase_date", "within_days": 90},
+              {"fact": "original_packaging", "eq": true},
+              {"fact": "has_receipt", "eq": true}
+            ]}
+          ]},
+          "outcome": {"type": "options", "options_from": "return_methods"},
+          "text": "Bronze members can return within 90 days of purchase, or with a receipt, or in original packaging.",
+          "provenance": ["abcd:Product Defect/subflows/Return Due to Size/actions/2/subtext/2"]
+        },
+        {
+          "id": "return_guest",
+          "when": {"all": [
+            {"fact": "member_level", "eq": "guest"},
+            {"any": [
+              {"fact": "purchase_date", "within_days": 30},
+              {"fact": "has_receipt", "eq": true}
+            ]}
+          ]},
+          "outcome": {"type": "options", "options_from": "return_methods"},
+          "text": "Guests can return within 30 days of purchase, or with a receipt.",
+          "provenance": ["abcd:Product Defect/subflows/Return Due to Size/actions/2/subtext/3"]
+        },
+        {
+          "id": "return_not_eligible",
+          "when": {"fact": "member_level", "in": ["gold", "silver", "bronze", "guest"]},
+          "outcome": {
+            "type": "decline",
+            "reason_code": "return_window_or_proof_missing",
+            "message": "I'm sorry, this item can't be returned under our policy for {member_level} members: the purchase is outside the return window, and there is no receipt or other qualifying proof."
+          },
+          "text": "If none of the conditions above hold, apologize, explain, and close the request.",
+          "provenance": ["abcd:Product Defect/subflows/Return Due to Size/actions/3/subtext/1"]
+        }
+      ]
+    },
+
+    "cancel": {
+      "targets": ["order_id", "item"],
+      "rules": [
+        {
+          "id": "cancel_order_received",
+          "when": {"fact": "shipping_status", "eq": "order received"},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "cancel_and_refund",
+              "action": "cancel_item_and_refund",
+              "payload": {"item_index": "$item.item_index", "amount_cents": "$item.amount_cents"},
+              "summary": "Remove the {item_name} from the order and refund {amount} to the original payment method."
+            }
+          ]},
+          "text": "If the order has not shipped, remove the unwanted item and refund it now.",
+          "provenance": ["abcd:Order Issue/subflows/Manage Cancel/actions/2/subtext/1"]
+        },
+        {
+          "id": "cancel_shipped_member",
+          "when": {"all": [
+            {"fact": "shipping_status", "in_constant": "shipped_statuses"},
+            {"fact": "member_level", "in_constant": "members"}
+          ]},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "refund_now",
+              "action": "refund_item",
+              "payload": {"item_index": "$item.item_index", "amount_cents": "$item.amount_cents"},
+              "summary": "Refund {amount} for the {item_name} now. After it arrives, contact us for a return label."
+            }
+          ]},
+          "text": "If shipped and the customer is a Bronze, Silver, or Gold member, refund now; the customer returns the item after arrival. v1 includes Bronze, as the source text does; the source's unclear form instruction is about data entry, not eligibility.",
+          "provenance": ["abcd:Order Issue/subflows/Manage Cancel/actions/3/subtext/0", "assumption"]
+        },
+        {
+          "id": "cancel_shipped_guest",
+          "when": {"all": [
+            {"fact": "shipping_status", "in_constant": "shipped_statuses"},
+            {"fact": "member_level", "eq": "guest"}
+          ]},
+          "outcome": {
+            "type": "decline",
+            "reason_code": "guest_wait_for_arrival",
+            "message": "Your order has already shipped, so I can't cancel the {item_name} now. Once it arrives, contact us and we'll start a return."
+          },
+          "text": "Guests with a shipped order must wait for arrival, then start a return.",
+          "provenance": ["abcd:Order Issue/subflows/Manage Cancel/actions/3/subtext/1"]
+        }
+      ]
+    },
+
+    "upgrade": {
+      "targets": ["order_id"],
+      "rules": [
+        {
+          "id": "upgrade_already_shipped",
+          "when": {"fact": "shipping_status", "in_constant": "shipped_statuses"},
+          "outcome": {
+            "type": "decline",
+            "reason_code": "already_shipped",
+            "message": "Your order has already shipped, so the delivery date can't be changed. It will most likely arrive today or tomorrow."
+          },
+          "provenance": ["abcd:Order Issue/subflows/Manage Upgrade/actions/2/subtext/2"]
+        },
+        {
+          "id": "upgrade_gold",
+          "when": {"all": [
+            {"fact": "shipping_status", "eq": "order received"},
+            {"fact": "member_level", "eq": "gold"}
+          ]},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "upgrade_free",
+              "action": "reschedule_delivery",
+              "payload": {"delivery_window": "tomorrow"},
+              "summary": "Upgrade to overnight delivery (arrives tomorrow). As a Gold member, the fee is waived."
+            }
+          ]},
+          "provenance": ["abcd:Order Issue/subflows/Manage Upgrade/actions/3/subtext/1"]
+        },
+        {
+          "id": "upgrade_paid",
+          "when": {"all": [
+            {"fact": "shipping_status", "eq": "order received"},
+            {"fact": "member_level", "in": ["guest", "bronze", "silver"]}
+          ]},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "upgrade_with_fee",
+              "action": "reschedule_delivery",
+              "payload": {"delivery_window": "tomorrow", "charge_amount_cents": "$const.upgrade_fee_cents"},
+              "summary": "Upgrade to overnight delivery (arrives tomorrow) for {upgrade_fee}, charged to the card on your account."
+            }
+          ]},
+          "text": "Non-Gold customers pay $20. The customer's yes to this option is the charge consent; a no closes the request with no change.",
+          "provenance": ["abcd:Order Issue/subflows/Manage Upgrade/actions/3/subtext/2", "assumption"]
+        }
+      ]
+    },
+
+    "downgrade": {
+      "targets": ["order_id"],
+      "rules": [
+        {
+          "id": "downgrade_order_received",
+          "when": {"fact": "shipping_status", "eq": "order received"},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "delay_to_next_week",
+              "action": "reschedule_delivery",
+              "payload": {"delivery_window": "next_week"},
+              "summary": "Move delivery to next week."
+            }
+          ]},
+          "provenance": ["abcd:Order Issue/subflows/Manage Downgrade/actions/3/subtext/0"]
+        },
+        {
+          "id": "downgrade_shipped_member",
+          "when": {"all": [
+            {"fact": "shipping_status", "in_constant": "shipped_statuses"},
+            {"fact": "member_level", "in_constant": "members"}
+          ]},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "shipping_fee_credit",
+              "action": "credit_shipping_fee",
+              "payload": {"amount_cents": "$const.standard_shipping_fee_cents"},
+              "summary": "The order has already shipped, so I can't delay it, but I can add a {standard_shipping_fee} credit to your account for the shipping fee."
+            }
+          ]},
+          "text": "The source gives no fee amount for this flow; v1 uses the $8 standard shipping fee from the ABCD Shipping Cost flow.",
+          "provenance": ["abcd:Order Issue/subflows/Manage Downgrade/actions/3/subtext/0", "abcd:Shipping Issue/subflows/Shipping Cost", "assumption"]
+        },
+        {
+          "id": "downgrade_shipped_guest",
+          "when": {"all": [
+            {"fact": "shipping_status", "in_constant": "shipped_statuses"},
+            {"fact": "member_level", "eq": "guest"}
+          ]},
+          "outcome": {
+            "type": "decline",
+            "reason_code": "shipped_guest_no_change",
+            "message": "I'm sorry, the order has already shipped and there's nothing I can change for it."
+          },
+          "provenance": ["abcd:Order Issue/subflows/Manage Downgrade/actions/3/subtext/1"]
+        }
+      ]
+    },
+
+    "promo": {
+      "targets": ["coupon_code"],
+      "rules": [
+        {
+          "id": "promo_platform_error",
+          "when": {"fact": "oracle_customer_right", "eq": true},
+          "on_unavailable": "skip",
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "issue_code_platform_error",
+              "action": "issue_promo_code",
+              "payload": {"discount_percent": "$const.promo_discount_percent"},
+              "summary": "Our system wrongly rejected your code. I can issue a new code for {promo_discount_percent}% off your next purchase."
+            }
+          ]},
+          "text": "If the Oracle says the customer is right, issue a new code. If the Oracle can't answer, skip this rule.",
+          "provenance": ["abcd:Purchase Dispute/subflows/Promo Code Invalid/actions/2/subtext/3"]
+        },
+        {
+          "id": "promo_member_goodwill",
+          "when": {"fact": "member_level", "in_constant": "members"},
+          "outcome": {"type": "options", "options": [
+            {
+              "option_id": "issue_code_goodwill",
+              "action": "issue_promo_code",
+              "payload": {"discount_percent": "$const.promo_discount_percent"},
+              "summary": "Your original code can't be used, but as a valued {member_level} member I can issue a new code for {promo_discount_percent}% off your next purchase."
+            }
+          ]},
+          "text": "Members get a new code even when the original code was not valid.",
+          "provenance": ["abcd:Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/2"]
+        },
+        {
+          "id": "promo_guest_no_code",
+          "when": {"all": [
+            {"fact": "member_level", "eq": "guest"},
+            {"fact": "oracle_customer_right", "eq": false}
+          ]},
+          "outcome": {
+            "type": "decline",
+            "reason_code": "guest_code_not_valid",
+            "message": "I checked our records: the code itself couldn't be applied, and I'm sorry that I'm not able to issue a replacement for guest accounts."
+          },
+          "text": "If a guest's code really was not valid, apologize. If the Oracle can't answer for a guest, hand off.",
+          "provenance": ["abcd:Purchase Dispute/subflows/Promo Code Invalid/actions/3/subtext/3"]
+        }
+      ]
+    }
+  }
+}

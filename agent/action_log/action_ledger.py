@@ -3,6 +3,8 @@
 This module does not perform refunds, modify orders, issue coupons, or decide
 policy. The policy gate supplies an Authorization; the ledger verifies
 that the proposal matches it and records the simulated or blocked outcome.
+Requests that end without an action (policy decline, customer said no,
+handoff to a human) are recorded too, so every request has one final row.
 """
 
 from __future__ import annotations
@@ -24,7 +26,15 @@ ACTION_TYPES = frozenset({
     "cancel_item_and_refund",
     "reschedule_delivery",
     "credit_shipping_fee",
+    "issue_promo_code",
 })
+# Actions that are not tied to one order.
+ORDERLESS_ACTIONS = frozenset({"issue_promo_code"})
+NON_ACTION_OUTCOMES = {
+    "handoff": "handoff",
+    "declined": "decline",
+    "customer_declined": "no_action",
+}
 RETURN_METHODS = frozenset({"by_mail", "in_store", "drop_off_center"})
 DELIVERY_WINDOWS = frozenset({"tomorrow", "next_week"})
 
@@ -36,7 +46,7 @@ class ActionProposal:
     intent: str
     action_type: str
     customer_id: str
-    order_id: str
+    order_id: str | None
     payload: dict[str, Any] = field(default_factory=dict)
 
 
@@ -90,6 +100,10 @@ def _validate_payload(action_type: str, payload: dict[str, Any]) -> None:
         if set(payload) != {"amount_cents"}:
             raise ValueError("credit_shipping_fee requires amount_cents")
         _positive_int(payload["amount_cents"], "amount_cents")
+    elif action_type == "issue_promo_code":
+        if set(payload) != {"discount_percent"}:
+            raise ValueError("issue_promo_code requires discount_percent")
+        _positive_int(payload["discount_percent"], "discount_percent")
 
 
 def _canonical_hash(value: dict[str, Any]) -> str:
@@ -103,7 +117,7 @@ class ActionLedger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path)) as db, db:
             db.executescript("""
-                CREATE TABLE IF NOT EXISTS action_events (
+                CREATE TABLE IF NOT EXISTS action_events_v2 (
                     event_id TEXT PRIMARY KEY,
                     request_id TEXT NOT NULL UNIQUE,
                     request_hash TEXT NOT NULL,
@@ -115,12 +129,13 @@ class ActionLedger:
                     payload_json TEXT NOT NULL,
                     policy_rule_id TEXT,
                     policy_version TEXT,
-                    outcome TEXT NOT NULL CHECK(outcome IN ('simulated','blocked','handoff')),
+                    outcome TEXT NOT NULL CHECK(outcome IN
+                        ('simulated','blocked','handoff','declined','customer_declined')),
                     reason_code TEXT,
                     created_at TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS action_events_by_conversation
-                    ON action_events(conversation_id, created_at);
+                CREATE INDEX IF NOT EXISTS action_events_v2_by_conversation
+                    ON action_events_v2(conversation_id, created_at);
             """)
 
     def _insert(self, record: dict[str, Any]) -> dict[str, Any]:
@@ -128,7 +143,7 @@ class ActionLedger:
         with closing(sqlite3.connect(self.path, timeout=30)) as db, db:
             db.row_factory = sqlite3.Row
             db.execute("BEGIN IMMEDIATE")
-            previous = db.execute("SELECT * FROM action_events WHERE request_id=?", (record["request_id"],)).fetchone()
+            previous = db.execute("SELECT * FROM action_events_v2 WHERE request_id=?", (record["request_id"],)).fetchone()
             if previous:
                 if previous["request_hash"] != request_hash:
                     raise ValueError("request_id was reused with different action details")
@@ -150,7 +165,7 @@ class ActionLedger:
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             db.execute(
-                "INSERT INTO action_events VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO action_events_v2 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 tuple(row.values()),
             )
             return self._public_result(row)
@@ -168,8 +183,13 @@ class ActionLedger:
     def record_action(self, proposal: ActionProposal, authorization: Authorization) -> dict[str, Any]:
         if proposal.action_type not in ACTION_TYPES:
             raise ValueError("unsupported action_type")
-        for key in ("conversation_id", "request_id", "intent", "customer_id", "order_id"):
+        for key in ("conversation_id", "request_id", "intent", "customer_id"):
             _required_text(getattr(proposal, key), key)
+        if proposal.action_type in ORDERLESS_ACTIONS:
+            if proposal.order_id is not None:
+                raise ValueError(f"{proposal.action_type} is not tied to an order")
+        else:
+            _required_text(proposal.order_id, "order_id")
         _required_text(authorization.policy_version, "policy_version")
         _validate_payload(proposal.action_type, proposal.payload)
         authorized = (
@@ -197,6 +217,19 @@ class ActionLedger:
     def record_handoff(self, *, conversation_id: str, request_id: str, intent: str,
                        reason_code: str, customer_id: str | None = None,
                        order_id: str | None = None) -> dict[str, Any]:
+        return self.record_outcome(
+            outcome="handoff", conversation_id=conversation_id, request_id=request_id,
+            intent=intent, reason_code=reason_code, customer_id=customer_id,
+            order_id=order_id,
+        )
+
+    def record_outcome(self, *, outcome: str, conversation_id: str, request_id: str,
+                       intent: str, reason_code: str, customer_id: str | None = None,
+                       order_id: str | None = None, policy_rule_id: str | None = None,
+                       policy_version: str | None = None) -> dict[str, Any]:
+        """Record a request that ended without a business action."""
+        if outcome not in NON_ACTION_OUTCOMES:
+            raise ValueError(f"unsupported non-action outcome: {outcome}")
         for key, value in (("conversation_id", conversation_id), ("request_id", request_id),
                            ("intent", intent), ("reason_code", reason_code)):
             _required_text(value, key)
@@ -204,13 +237,13 @@ class ActionLedger:
             "request_id": request_id,
             "conversation_id": conversation_id,
             "intent": intent,
-            "action_type": "handoff",
+            "action_type": NON_ACTION_OUTCOMES[outcome],
             "customer_id": customer_id,
             "order_id": order_id,
             "payload": {},
-            "policy_rule_id": None,
-            "policy_version": None,
-            "outcome": "handoff",
+            "policy_rule_id": policy_rule_id,
+            "policy_version": policy_version,
+            "outcome": outcome,
             "reason_code": reason_code,
         })
 
@@ -219,7 +252,7 @@ class ActionLedger:
         with closing(sqlite3.connect(self.path)) as db:
             db.row_factory = sqlite3.Row
             rows = db.execute(
-                "SELECT * FROM action_events WHERE conversation_id=? ORDER BY created_at,event_id",
+                "SELECT * FROM action_events_v2 WHERE conversation_id=? ORDER BY created_at,event_id",
                 (conversation_id,),
             ).fetchall()
         return [self._public_result(row) for row in rows]

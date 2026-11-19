@@ -1,81 +1,74 @@
-# Current agent workflow and evaluation checkpoints
+# Agent workflow (policy v1)
 
-This document describes the **implemented** backend. It reconciles the
-earlier two-checkpoint design with the compiled graph in
-[`agent/retail_graph/graph.py`](../agent/retail_graph/graph.py).
+This document describes the **implemented** backend after the policy-v1
+redesign. The policy file is the single source of truth; the graph contains
+no intent-specific branches.
 
 ```mermaid
 flowchart LR
-    U[Customer message] --> I[understand: model extracts requests and clues]
-    I --> R{route: Python checks next required step}
-    R -->|missing clue| A[reply and wait for next turn]
-    R -->|account/order/coupon fact needed| Q[query: scoped read-only tool]
+    U[Customer message] --> I[understand: model fills a fixed schema]
+    I --> R{route: same question ladder for every intent}
+    R -->|ask customer| A[reply and wait]
+    R -->|need a record| Q[query: read-only tool]
     Q --> R
-    R -->|facts ready| P[propose: model selects action or abstains]
-    P --> G[authorize: independent policy gate]
+    R -->|option chosen and confirmed| G[authorize: gate re-reads and re-runs policy]
     G --> R
-    A --> E[End current turn]
+    R -->|decline / handoff / done| A
 ```
 
-The state contains the dialogue, one account candidate, a list of separate
-requests, each request's order/coupon facts, a proposed action, and CP1/CP2
-event arrays. `SqliteSaver` persists the state by `thread_id`, so another
-conversation does not inherit it. **LangGraph runtime checkpoints** are
-saved state snapshots; **CP1/CP2** below are evaluation moments in our
-business workflow. They are different concepts.
+## Responsibilities
 
-## What happens in one turn
+| Component | Decides | Never decides |
+| --- | --- | --- |
+| `llm_interpreter.py` (model) | What the customer said: identity details, new requests, order/item/coupon, answers to questions, option choice, yes/no | Eligibility, amounts, payloads, which tool to call |
+| `agent/policy/engine.py` | Which facts are still needed, and whether the policy declines, hands off, or offers options with exact payloads | Anything about language |
+| `graph.py` `route` | The next step, by asking the policy engine | Policy content |
+| `policy_gate.py` | Whether a confirmed option is still allowed after re-reading records | Which option the customer wants |
+| `action_ledger.py` | Nothing; it verifies and records | — |
 
-1. `understand` asks the model to recognize one or more of the eight intents
-   and extract only customer-provided clues. It never treats a model-created
-   order ID or coupon code as verified. A new need becomes a separate request
-   entry in the same chat.
-2. `route` uses a small explicit decision tree. If an account clue, return
-   problem description, order ID, coupon code, or item selection is missing,
-   the agent asks for it and stops that turn. Otherwise it chooses exactly
-   one permitted query: `lookup_customer`, `lookup_order`, or `check_coupon`.
-3. `query` runs the selected read-only backend tool and returns its result to
-   state. The graph loops back to `route` to decide whether another fact is
-   needed. Coupon requests are the only branch that goes through the local
-   platform checkout attempt and Oracle merchant check. A coupon complaint
-   may have no order because checkout failed.
-4. `propose` gives the model the applicable source-linked policy rules and
-   queried facts. It returns a structured action and exact parameters, or
-   abstains. The model does not write to a database.
-5. `authorize` re-reads the business SQLite facts, checks the rule and exact
-   payload, and records an allowed or blocked **simulated** event. Missing
-   policy coverage or unconfirmed authority becomes a handoff. The agent's
-   reply reports the outcome; it never claims a real refund or order change.
+## The route ladder
 
-## CP1: before a query or question
+Every turn, for the first open request:
 
-`cp1_events` records the request, intent, next step, planned tool, and missing
-clue/problem each time `route` runs. Future labels should check whether the
-agent identified all needs, used only customer-provided clues, asked the right
-question, and selected the right tool and parameters. A route may run more
-than once per turn because each tool result returns to it.
+1. Is there a request? If the customer raised something outside the eight
+   intents, say so right away and record a handoff.
+2. Is the customer verified? Policy methods: email, or full name + zip code.
+   An account ID alone is not enough. Once verified, identity is locked for
+   the conversation.
+3. Are the targets known? Order ID (then `lookup_order`), item (matched by
+   name or the only item), coupon code.
+4. Does the engine have every fact it needs? System facts come first
+   (`lookup_order`, `check_coupon`); if a system record has no value and the
+   policy allows it, the customer is asked. Only facts that can still change
+   the outcome are asked.
+5. Decision: `decline` explains and closes the request; `handoff` closes it
+   for a human; `options` are offered.
+6. The customer picks an option and says yes; then `authorize`. "No" closes
+   the request with no change. New details after an offer (another item, a
+   different answer) make the engine decide again.
 
-## CP2: before and after a proposed action
+Requests are handled one at a time; a resolved, declined, or handed-off
+request moves on to the next one in the same turn.
 
-`cp2_events` records the model proposal and the backend gate outcome, reason,
-and policy rule ID. Future labels should check policy applicability, fact
-sources, action type, exact item/amount/date parameters, abstention, and
-customer explanation. The gate is a safety boundary, not a substitute for
-evaluating whether the model proposed the best next step.
+## What is recorded
 
-## Implemented limits
+* `cp1_events`: one entry each time `route` ends a step: request, intent,
+  next step, planned tool, and what was asked.
+* `cp2_events`: each policy decision (options with rule ID, decline, handoff)
+  and each authorization result.
+* Ledger (`action_events_v2`): exactly one final row per request:
+  `simulated`, `blocked`, `declined`, `customer_declined`, or `handoff`, with
+  the policy rule ID and policy version.
 
-- The first version routes directly to the small policy JSON subset for a
-  recognized intent; there is no vector RAG or general document retrieval.
-- A unique synthetic account lookup and matching order are **not production
-  identity authentication**. A logged-in session or independent verification
-  would be needed before sensitive real actions.
-- Return actions need confirmed return address and method. The current chat
-  flow does not yet collect and verify those trusted details, so it hands
-  returns to a human. Non-Gold upgrades needing charge consent are similarly
-  blocked until trusted consent is available.
-- The Oracle fixtures are project-created and not linked to all 1,148 ABCD
-  conversations. The current prototype checks a coupon but has no authorized
-  replacement-code issuer.
-- Policy wording unresolved in the source is handled conservatively by the
-  gate. Smoke tests exercise only a few synthetic examples, not all branches.
+Labels and evaluation runs for CP1/CP2/full conversations are the next phase;
+these records are what they will read.
+
+## Known limits
+
+* The model adapter is schema-only and has not been re-run live after the
+  redesign. Replies are templates, not model-phrased.
+* Customer statements (receipt, purchase date) are accepted and labeled
+  `source=customer`; there is no evidence upload.
+* No supervisor-approval tier; v1 has confirm-then-execute and handoff only.
+* Oracle fixtures are still project-made and not linked to all ABCD promo
+  cases; for guests without a usable Oracle verdict the request is handed off.

@@ -61,6 +61,43 @@ def lookup_customer(identifier_type: str, identifier_value: str,
     }
 
 
+VERIFY_FIELDS = {"email", "full_name", "zip_code", "account_id"}
+
+
+def verify_customer(claims: dict[str, str], db_path: Path = DEFAULT_DB) -> dict:
+    """Verify a customer from the identity fields of one policy method.
+
+    Every supplied field must match the same account. ``zip_code`` matches
+    when any of the customer's orders uses that zip code. The caller decides
+    which fields are sufficient (policy identity methods); this function only
+    checks that the supplied fields agree with one account.
+    """
+    fields = {k: " ".join(str(v).strip().split()) for k, v in claims.items()
+              if k in VERIFY_FIELDS and isinstance(v, str) and v.strip()}
+    if not fields:
+        raise ValueError("at least one identity field is required")
+    clauses, params = [], []
+    for key, value in fields.items():
+        if key == "zip_code":
+            clauses.append("EXISTS (SELECT 1 FROM orders o WHERE o.customer_id=c.customer_id "
+                           "AND o.zip_code=?)")
+        else:
+            clauses.append(f"lower(c.{IDENTIFIER_COLUMNS[key]})=lower(?)")
+        params.append(value)
+    with closing(_open_read_only(db_path)) as db:
+        rows = db.execute(
+            "SELECT c.customer_id, c.member_level FROM customers c WHERE "
+            + " AND ".join(clauses) + " LIMIT 2",
+            params,
+        ).fetchall()
+    if not rows:
+        return {"status": "not_found"}
+    if len(rows) > 1:
+        return {"status": "multiple_candidates"}
+    return {"status": "found", "customer_id": rows[0]["customer_id"],
+            "member_level": rows[0]["member_level"]}
+
+
 def lookup_order(customer_id: str, order_id: str,
                  db_path: Path = DEFAULT_DB) -> dict:
     """Return one customer's order and items, without exposing other orders."""
@@ -70,7 +107,8 @@ def lookup_order(customer_id: str, order_id: str,
         raise ValueError("order_id must be non-empty")
     with closing(_open_read_only(db_path)) as db:
         order = db.execute(
-            "SELECT order_id, purchase_date, shipping_status, packaging "
+            "SELECT order_id, purchase_date, shipping_status, packaging, "
+            "street_address, city, state, zip_code "
             "FROM orders WHERE customer_id=? AND order_id=?",
             (customer_id.strip(), order_id.strip()),
         ).fetchone()
@@ -98,6 +136,10 @@ def lookup_order(customer_id: str, order_id: str,
         "purchase_date": order["purchase_date"],
         "shipping_status": order["shipping_status"],
         "packaging": order["packaging"],
+        "street_address": order["street_address"],
+        "city": order["city"],
+        "state": order["state"],
+        "zip_code": order["zip_code"],
         "items": items,
     }
     missing = [key for key in ("purchase_date", "shipping_status", "packaging")

@@ -8,15 +8,13 @@ graph TD;
 	understand(understand)
 	route(route)
 	query(query)
-	propose(propose)
 	authorize(authorize)
 	reply(reply)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> understand;
 	authorize --> route;
-	propose --> authorize;
 	query --> route;
-	route -.-> propose;
+	route -.-> authorize;
 	route -.-> query;
 	route -.-> reply;
 	understand --> route;
