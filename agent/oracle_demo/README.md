@@ -26,36 +26,18 @@ python -m agent.oracle_demo.init_demo
 python -m unittest -v agent.oracle_demo.test_core agent.retail_tools.test_check_coupon
 ```
 
-The tests need only Python's standard library. They also run a local HTTP server and call it through `agent_tool.ask_the_oracle`, demonstrating the tool boundary without an LLM or paid merchant API.
+The tests need only Python's standard library. They also run a local HTTP server and POST to it, demonstrating the tool boundary without an LLM or paid merchant API. The agent reaches this route through `agent/retail_tools/check_coupon.py`.
 
-FastAPI server:
-
-```powershell
-python -m pip install -e ".[dev]"
-$env:ORACLE_CACHE_SECRET='local-demo-key-change-me'
-python -m uvicorn agent.oracle_demo.api:app --host 127.0.0.1 --port 8000
-```
-
-The `api.py` FastAPI wrapper exposes `GET /health` and `POST /oracle/check`. `stdlib_api.py` offers the same local route without dependencies:
+HTTP server (`GET /health` and `POST /oracle/check`, standard library only):
 
 ```powershell
 $env:ORACLE_CACHE_SECRET='local-demo-key-change-me'
 python -m agent.oracle_demo.stdlib_api
 ```
 
-Example call from an agent tool adapter (in a second terminal):
-
-```python
-from agent.oracle_demo.agent_tool import ask_the_oracle
-
-answer = ask_the_oracle(
-    "http://127.0.0.1:8000",
-    merchant_id="M-101", customer_id="C0001", coupon_code="GOOD20",
-    cart_total_cents=7500, attempt_id="ATT-PLATFORM-1",
-    as_of="2026-11-01T12:00:00+00:00",  # fixed demo clock
-)
-print(answer)
-```
+Example request (in a second terminal) with body
+`{"merchant_id": "M-101", "customer_id": "C0001", "coupon_code": "GOOD20", "cart_total_cents": 7500, "attempt_id": "ATT-PLATFORM-1", "as_of": "2026-11-01T12:00:00+00:00"}`
+posted to `http://127.0.0.1:8000/oracle/check`.
 
 First call has `cache_hit: false`; the same second call has `cache_hit: true`, with one row in `merchant_call_log`. Try `OLD20` / `ATT-EXPIRED-1` for expiry, `USED10` for redemption, `BASKET15` with a basket below 10000 cents, and `DOWN` for merchant outage.
 

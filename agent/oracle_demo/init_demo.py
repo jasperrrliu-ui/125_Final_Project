@@ -1,4 +1,4 @@
-"""Create the two local SQLite databases without requiring FastAPI."""
+"""Create the two local SQLite databases for the Oracle demo."""
 
 from pathlib import Path
 

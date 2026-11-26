@@ -2,15 +2,25 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+import json
 from pathlib import Path
 import sqlite3
 import tempfile
 import threading
 import unittest
+from urllib.request import Request, urlopen
 
-from agent.oracle_demo.agent_tool import ask_the_oracle
 from agent.oracle_demo.core import CheckRequest, DEMO_TIME, OracleService, initialize_demo
 from agent.oracle_demo.stdlib_api import make_server
+
+
+def _post_check(base_url: str, **payload) -> dict:
+    """POST one check to the local Oracle HTTP route, as the coupon tool does."""
+    request = Request(base_url.rstrip("/") + "/oracle/check",
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json"}, method="POST")
+    with urlopen(request, timeout=5) as response:
+        return json.load(response)
 
 
 class OracleTests(unittest.TestCase):
@@ -87,7 +97,7 @@ class OracleTests(unittest.TestCase):
         self.assertEqual(self.oracle.merchant_call_count(), 1)
         self.assertEqual(sum(not r["cache_hit"] for r in results), 1)
 
-    def test_agent_http_tool_calls_the_oracle(self):
+    def test_http_route_calls_the_oracle(self):
         server = make_server(port=0, data_dir=Path(self.temp.name), secret=b"unit-test-secret")
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -95,8 +105,8 @@ class OracleTests(unittest.TestCase):
             url = f"http://127.0.0.1:{server.server_port}"
             args = dict(merchant_id="M-101", customer_id="C0001", coupon_code="GOOD20",
                         cart_total_cents=7500, attempt_id="ATT-PLATFORM-1", as_of=DEMO_TIME)
-            first = ask_the_oracle(url, **args)
-            second = ask_the_oracle(url, **args)
+            first = _post_check(url, **args)
+            second = _post_check(url, **args)
             self.assertEqual(first["decision"], "platform_rejected_valid_coupon")
             self.assertTrue(second["cache_hit"])
             with closing(sqlite3.connect(Path(self.temp.name) / "platform_oracle.sqlite")) as db:

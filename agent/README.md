@@ -11,7 +11,7 @@ changed.
 | [`retail_graph/`](retail_graph/README.md) | Five-node LangGraph conversation flow, state persistence, model adapter, CLI chat, and multi-turn smoke runner. |
 | [`retail_tools/`](retail_tools/README.md) | Read-only identity verification and order lookup, plus one coupon wrapper that looks up a platform attempt and calls the Oracle. |
 | [`action_log/`](action_log/README.md) | Policy gate (re-reads records, re-runs the policy) and append-only simulated action ledger. |
-| [`oracle_demo/`](oracle_demo/README.md) | Mock merchant and platform coupon databases with FastAPI/stdlib HTTP endpoints. |
+| [`oracle_demo/`](oracle_demo/README.md) | Mock merchant and platform coupon databases with a standard-library HTTP endpoint. |
 
 The compiled flow is `understand -> route -> (query -> route)* ->
 (authorize -> route)* -> reply`. The model only reads what the customer said.
@@ -31,7 +31,7 @@ The Oracle demo can be started separately for interactive chat:
 
 ```powershell
 python -m agent.oracle_demo.init_demo
-python -m uvicorn agent.oracle_demo.api:app --host 127.0.0.1 --port 8000
+python -m agent.oracle_demo.stdlib_api
 ```
 
 In another terminal, set a local `OPENAI_API_KEY`, then run

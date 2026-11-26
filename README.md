@@ -11,7 +11,7 @@ and coupon checkout attempts. No action changes a real store or payment system.
 | Path | What it contains |
 | --- | --- |
 | [`raw_data/`](raw_data/README.md) | Unmodified ABCD files and source provenance. |
-| [`processed_data/`](processed_data/README.md) | The complete raw-to-processed data lineage, case candidates, 808-customer simulation, SQLite schemas, and source-linked policy rules. |
+| [`processed_data/`](processed_data/README.md) | The complete raw-to-processed data lineage, 808-customer simulation, SQLite schema, and policy v1. |
 | [`agent/`](agent/README.md) | LangGraph workflow, policy engine, read-only business tools, policy gate, simulated action ledger, and local coupon Oracle. |
 | [`docs/POLICY_V1.md`](docs/POLICY_V1.md) | Policy v1 (generated from `processed_data/policy/policy_v1.json`, the single source of truth). |
 | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) | Current workflow and the two business evaluation checkpoints. |
@@ -22,21 +22,20 @@ and coupon checkout attempts. No action changes a real store or payment system.
 ```text
 ABCD raw conversations + scenario facts + guidelines
     |-- select eight request types, preserve original train/dev/test splits
-    |-- create conversation cutpoint candidates and isolated scenario fixtures
     |-- regroup 1,148 selected conversations into 808 simulated customers
     |     while retaining source IDs, splits, and membership levels
     |-- construct account/order/item SQLite tables and synthetic identity values
-    |-- transcribe 22 source-linked policy rules from guidelines.json
-    `-- policy v1: draft policy (not yet reviewed) built on those rules plus general
-          rules (identity, confirmation, decline vs handoff)
+    `-- policy v1: draft policy (not yet reviewed) transcribed from guidelines.json,
+          each rule linked to its source path, plus general rules
+          (identity, confirmation, decline vs handoff)
 
 Separate project simulation: platform checkout records + mock merchant coupons
     -> local Oracle HTTP service (ABCD does not provide these records)
 ```
 
-The 8 smoke prompts and the 32 combined-request prompts are **synthetic test
-inputs, not ABCD gold labels**. The larger cutpoint pools also have no reviewed
-reference answers. See the [data README](processed_data/README.md) for exact
+The smoke conversations and the 32 combined-request prompts are **synthetic
+test inputs, not ABCD gold labels**. No reviewed reference answers exist yet.
+See the [data README](processed_data/README.md) for exact
 counts, field provenance, schema decisions, and known gaps.
 
 ## Run locally
@@ -45,9 +44,9 @@ Use Python 3.11+ from the repository root. On Windows PowerShell:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev,llm]"
+.\.venv\Scripts\python -m pip install -e ".[llm]"
 .\.venv\Scripts\python -m agent.retail_graph.smoke_agent --scripted
-.\.venv\Scripts\python -m unittest -q tests.test_prepared_cases agent.action_log.test_action_ledger agent.action_log.test_policy_gate agent.policy.test_engine agent.retail_tools.test_read_tools agent.retail_tools.test_check_coupon agent.retail_graph.test_graph
+.\.venv\Scripts\python -m unittest -q agent.action_log.test_action_ledger agent.action_log.test_policy_gate agent.policy.test_engine agent.retail_tools.test_read_tools agent.retail_tools.test_check_coupon agent.retail_graph.test_graph agent.oracle_demo.test_core
 ```
 
 The scripted smoke runs ten multi-turn conversations covering all eight
@@ -59,16 +58,14 @@ under ignored `outputs/`.
 To rebuild the checked-in processed data from the original sources:
 
 ```powershell
-.\.venv\Scripts\python scripts\prepare_test_cases.py
 .\.venv\Scripts\python scripts\build_synthetic_customers.py
-.\.venv\Scripts\python scripts\build_policy_rules.py raw_data\guidelines.json processed_data\policy\policy_rules.json
 .\.venv\Scripts\python scripts\render_policy_doc.py   # after editing policy_v1.json
 ```
 
 The real-model smoke uses `gpt-5.4-mini` by default. Keep API credentials out
 of Git; `run_live_smoke.ps1` prompts for a key without saving it. The current
-backend is a prototype, and its eight-case smoke results are not a substitute
-for the planned 128-case reviewed evaluation.
+backend is a prototype, and its smoke results are not a substitute for the
+planned reviewed evaluation.
 
 ## Current boundary
 
