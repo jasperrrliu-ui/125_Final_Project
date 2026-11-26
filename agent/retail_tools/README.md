@@ -40,10 +40,9 @@ calling the merchant. A server or merchant failure returns
 `source_unavailable`, never a guessed yes/no. It does not issue a new coupon.
 
 `oracle_url`, `platform_db`, and the fixed test clock `as_of` are backend
-configuration; they are not inputs that the LLM should fill. The same
-`POST /oracle/check` route is available through the optional FastAPI wrapper
-or the standard-library HTTP server. Tests use the latter so no external
-package installation is required.
+configuration; they are not inputs that the LLM should fill. The
+`POST /oracle/check` route is served by the standard-library HTTP server in
+`agent/oracle_demo/stdlib_api.py`, so no external package is required.
 
 The current platform fixture has four demonstration checkout attempts, not
 attempts tied to the ABCD source cases. `GOOD20` has three attempts, so the

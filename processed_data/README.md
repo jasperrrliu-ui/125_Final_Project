@@ -4,21 +4,16 @@ This directory contains **project transformations and simulations**, separate
 from the unchanged files in [`raw_data/`](../raw_data/README.md). Start with
 this page before using a JSONL file or SQLite database as agent evidence.
 
-## The three branches
+## The two branches
 
 | Branch | Input | Output | What is original vs. constructed |
 | --- | --- | --- | --- |
-| [`abcd_cases/`](abcd_cases/README.md) | `abcd_v1.1.json.gz`, `kb.json` | 1,148 selected conversations, isolated scenario facts, 4,428 tool-cut candidates, 847 policy-cut candidates, SQLite | Dialogue, scenario values, and historical actions come from ABCD; turn indexing, selection, cutpoints, and relational schema are ours. |
-| [`customer_simulation/`](customer_simulation/README.md) | The same 1,148 selected ABCD scenarios and dialogues | 808 linked synthetic customers, 1,148 orders, 1,273 item rows, identity-rewritten dialogue, 32 combined-request prompts, SQLite | Membership level and each source order/item fact are preserved; customer identities, cross-conversation grouping, combined prompts, IDs, and DB relations are ours. |
-| [`policy/`](policy/README.md) | `raw_data/guidelines.json`, checked against `kb.json` and `ontology.json` | 22 source-linked rules in `policy_rules.json` | Source sentences are copied as evidence; rule IDs, structured conditions, and conservative implementation choices are ours. |
+| [`customer_simulation/`](customer_simulation/README.md) | 1,148 ABCD scenarios and dialogues for the eight selected intents | 808 linked synthetic customers, 1,148 orders, 1,273 item rows, identity-rewritten dialogue, 32 combined-request prompts, SQLite | Membership level and each source order/item fact are preserved; customer identities, cross-conversation grouping, combined prompts, IDs, and DB relations are ours. |
+| [`policy/`](policy/README.md) | `raw_data/guidelines.json`, plus general rules modeled on tau-bench | `policy_v1.json`, the single policy source for the engine and gate | Each rule records its source path; rule IDs, structured conditions, and assumptions (tagged `assumption`) are ours. |
 
-The two SQLite databases have **different purposes**. `abcd_cases/scenario_fixtures.sqlite`
-keeps every source scenario separate under its original `convo_id`. It does
-not assert that repeated ABCD names identify the same customer.
 `customer_simulation/synthetic_retail.sqlite` deliberately links several
 source conversations to a new simulated customer so the agent can practice
-account, order, and product queries. The schemas are respectively
-[`sql/scenario_schema.sql`](../sql/scenario_schema.sql) and
+account, order, and product queries. Its schema is
 [`sql/synthetic_retail_schema.sql`](../sql/synthetic_retail_schema.sql).
 
 ## Exact transformation steps
@@ -28,12 +23,7 @@ account, order, and product queries. The schemas are respectively
    `promo_code_out_of_date`, `manage_cancel`, `manage_upgrade`, and
    `manage_downgrade`. This yields **1,148 conversations** (925/111/112 in
    original train/dev/test). Keep `convo_id` and split on every derived record.
-2. Normalize turns and copy the `scenario.personal`, `scenario.order`, and
-   `scenario.product` background into case-isolated JSONL and SQLite. Select
-   candidate cutpoints before observed actions and after policy-relevant
-   evidence. The **4,428 tool** and **847 policy** rows are candidate moments,
-   not independent customers or verified correct answers.
-3. For a second, agent-facing business simulation, group conversations only
+2. For a second, agent-facing business simulation, group conversations only
    within the same original split and membership tier. Use a fixed seed
    (`1252026`) to allocate **808 distinct customer identities**: 548 have one
    request type, 180 have two, and 80 have three. The original eight-intent
@@ -41,18 +31,18 @@ account, order, and product queries. The schemas are respectively
    reused names and identifiers with unique synthetic account IDs, usernames,
    emails (`example.test`), and test phone numbers. We do not randomly change
    the source membership tier or order facts.
-4. Write **1,148 orders** and **1,273 item rows** from the ABCD `scenario`
+3. Write **1,148 orders** and **1,273 item rows** from the ABCD `scenario`
    records, preserving missing values as SQL `NULL`. The agent-facing view
    links customers to orders and items. `source_cases` preserves the ABCD
    conversation ID and the source/simulation distinction.
-5. Create **32 new combined-request opening messages** (24 two-intent, 8
+4. Create **32 new combined-request opening messages** (24 two-intent, 8
    three-intent). These are synthetic prompts assembled from separate ABCD
    needs; they are not historical ABCD conversations. The identity-rewritten
    historical dialogues remain in `rewritten_conversations.jsonl` for source
    comparison, but their actions are not gold labels.
-6. Transcribe the eight relevant subflows in `guidelines.json` into 22 rules.
-   Each rule stores its source path and original policy text. Ambiguous policy
-   wording stays listed as unresolved, rather than being silently invented.
+5. Transcribe the eight relevant subflows in `guidelines.json` into
+   `policy/policy_v1.json`. Each rule stores its source path; additions not in
+   the source are tagged `assumption` and await review.
 
 The customer simulator flags **44** source dialogues with an email mentioned
 in conversation that differs from the `scenario` email. It avoids those cases
@@ -96,23 +86,21 @@ HTTP API; it never issues a replacement code.
 From the repository root, after installing dependencies:
 
 ```powershell
-python scripts\prepare_test_cases.py
 python scripts\build_synthetic_customers.py
-python scripts\build_policy_rules.py raw_data\guidelines.json processed_data\policy\policy_rules.json
-python -m unittest -q tests.test_prepared_cases
+python scripts\render_policy_doc.py   # after editing policy_v1.json
 ```
 
-`abcd_cases/manifest.json` and `customer_simulation/manifest.json` give source
-hashes, counts, and review flags. The policy JSON gives the guideline hash
-and exact evidence paths. Rebuilding may rewrite generated files but must not
+`customer_simulation/manifest.json` gives source hashes, counts, and review
+flags. The policy JSON gives the exact evidence path of each rule. Rebuilding may rewrite generated files but must not
 change the raw source. Any unexplained count/hash change needs investigation.
 
 ## Reference labels are not present yet
 
-The original representative actions in `delexed.targets` are useful **label
-candidates**, not automatic ground truth for our new tools or for a chosen
-earlier cutoff. The two checkpoint definitions are in
-[`docs/WORKFLOW.md`](../docs/WORKFLOW.md). A planned 128-case gold set requires
-case review, expected tool/parameter and policy/action labels, and human
-audit of model-assisted labeling. No JSONL or smoke-test result here should be
+Historical ABCD conversation prefixes are not used as test cases: the agent
+asks different questions in a different order than the original human agents,
+so a replayed prefix does not match the agent's own state. Evaluation cases
+will be built from the synthetic database (see
+[`docs/WORKFLOW.md`](../docs/WORKFLOW.md) for the checkpoints). A reviewed
+case set requires expected step/parameter and policy/decision labels and
+human audit of model-assisted labeling. No JSONL or smoke-test result here should be
 reported as that finished evaluation set.
