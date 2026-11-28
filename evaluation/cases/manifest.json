@@ -1,0 +1,78 @@
+{
+  "files": {
+    "conversation.jsonl": {
+      "by_category": {
+        "manage_cancel": 2,
+        "manage_downgrade": 2,
+        "manage_downgrade+return_color": 1,
+        "manage_upgrade": 2,
+        "manage_upgrade+return_size": 1,
+        "promo_code_invalid": 2,
+        "promo_code_out_of_date": 2,
+        "return_color": 2,
+        "return_color+manage_downgrade": 1,
+        "return_size": 2,
+        "return_size+manage_downgrade": 1,
+        "return_stain": 2
+      },
+      "by_intent": {
+        "manage_cancel": 2,
+        "manage_downgrade": 2,
+        "manage_downgrade+return_color": 1,
+        "manage_upgrade": 2,
+        "manage_upgrade+return_size": 1,
+        "promo_code_invalid": 2,
+        "promo_code_out_of_date": 2,
+        "return_color": 2,
+        "return_color+manage_downgrade": 1,
+        "return_size": 2,
+        "return_size+manage_downgrade": 1,
+        "return_stain": 2
+      },
+      "cases": 20
+    },
+    "cp1.jsonl": {
+      "by_category": {
+        "correction": 4,
+        "coupon_code": 4,
+        "identity": 8,
+        "item": 4,
+        "opening": 24,
+        "order_id": 8,
+        "out_of_scope": 2,
+        "two_requests": 6
+      },
+      "by_intent": {
+        "manage_cancel": 9,
+        "manage_downgrade": 11,
+        "manage_upgrade": 4,
+        "promo_code_invalid": 6,
+        "promo_code_out_of_date": 4,
+        "return_color": 9,
+        "return_size": 12,
+        "return_stain": 5
+      },
+      "cases": 60
+    },
+    "cp2.jsonl": {
+      "by_category": {
+        "consent": 15,
+        "policy_decision": 17,
+        "receipt_answer": 8
+      },
+      "by_intent": {
+        "manage_cancel": 3,
+        "manage_downgrade": 8,
+        "manage_upgrade": 5,
+        "promo_code_invalid": 3,
+        "return_color": 10,
+        "return_size": 5,
+        "return_stain": 6
+      },
+      "cases": 40
+    }
+  },
+  "policy_version": "1.0.0",
+  "pool_size": 210,
+  "seed": 1125
+}
