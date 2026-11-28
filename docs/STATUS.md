@@ -40,3 +40,21 @@ ABCD cutpoint pools (`processed_data/abcd_cases/`, `scripts/prepare_test_cases.p
 ABCD conversation prefixes do not fit the current workflow (the agent asks
 different questions in a different order), so evaluation cases will be built
 from the synthetic database instead. The removed files remain in Git history.
+
+## 2026-11-28: evaluation definitions and event records
+
+* `docs/WORKFLOW.md` now defines the two checkpoints for the current design:
+  **CP1** (information gathering: extraction and the next query or question)
+  and **CP2** (decision and action: the policy decision against the true
+  facts, and actions only after a real choice and yes), plus full
+  conversations with a simulated customer, the case format, and how labels
+  are made.
+* The graph records what the evaluation needs: `extract_events` (the model's
+  extraction for each message), a `turn` on every event, tool `arguments` in
+  CP1, and `facts_used` plus option payloads in CP2.
+* **Checks**: 54 unit tests and 10 scripted smoke conversations pass. The
+  live model path still has to be run (`run_live_smoke.ps1`); this
+  environment has no OpenAI access.
+
+Next: evaluation harness and cases; chat UI.
+

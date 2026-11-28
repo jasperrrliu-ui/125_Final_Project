@@ -19,8 +19,10 @@ flowchart LR
 
 `ChatState` holds messages, identity claims and the verified customer, a
 list of requests (each with its targets, fetched records, customer
-statements, offered options, choice, and confirmation), the reply, and
-CP1/CP2 event records. `SqliteSaver` stores it by `thread_id`.
+statements, offered options, choice, and confirmation), the reply, and the
+evaluation records (`extract_events`, `cp1_events`, `cp2_events`; see
+[`docs/WORKFLOW.md`](../../docs/WORKFLOW.md)). `SqliteSaver` stores it by
+`thread_id`.
 
 `build_graph(interpreter, policy_gate, checkpointer, ...)` needs an
 interpreter with one method, `extract`. `OpenAIInterpreter` is the real model

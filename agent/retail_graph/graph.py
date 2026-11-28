@@ -64,6 +64,7 @@ class ChatState(TypedDict, total=False):
     next_tool: str | None
     response_parts: list[str]
     reply_text: str
+    extract_events: list[dict[str, Any]]
     cp1_events: list[dict[str, Any]]
     cp2_events: list[dict[str, Any]]
 
@@ -98,6 +99,22 @@ def match_item(name: str | None, items: list[dict[str, Any]]) -> int | None:
         return None
     matches = [x for x in items if wanted <= _tokens(x["name"])]
     return matches[0]["item_index"] if len(matches) == 1 else None
+
+
+def _turn(state: ChatState) -> int:
+    """1-based index of the customer message this graph run is handling."""
+    return sum(isinstance(m, HumanMessage) for m in state.get("messages") or [])
+
+
+def _json_safe(value: Any) -> Any:
+    """Copy an interpreter result into plain JSON types for the event log."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
 
 
 def _fingerprint(options: list[dict[str, Any]] | None) -> list[tuple]:
@@ -224,7 +241,17 @@ def build_graph(
             elif request["status"] == "waiting":
                 request["status"] = "open"
 
-        update.update({"requests": requests, "response_parts": parts})
+        # Evaluation record: what the LLM read from this message, and which
+        # request its details were applied to. Raised requests are the new ones.
+        events = list(state.get("extract_events") or [])
+        events.append({
+            "turn": _turn(state),
+            "message": str(latest),
+            "parsed": _json_safe(parsed),
+            "raised_request_ids": [r["id"] for r in requests[len(state.get("requests") or []):]],
+            "applied_to_request_id": requests[index]["id"] if index is not None else None,
+        })
+        update.update({"requests": requests, "response_parts": parts, "extract_events": events})
         return update
 
     # ----------------------------------------------------------------- route
@@ -236,13 +263,26 @@ def build_graph(
         cp2 = list(state.get("cp2_events") or [])
         customer_id = state.get("customer_id")
         claims = state.get("identity_claims") or {}
+        turn = _turn(state)
         step, tool = "reply", None
+
+        def tool_arguments(planned_tool: str, request: dict | None) -> dict[str, Any]:
+            if planned_tool == "verify_customer":
+                method = policy.identity_method(claims) or ()
+                return {k: claims[k] for k in method}
+            if planned_tool == "lookup_order":
+                return {"order_id": request.get("order_id")}
+            if planned_tool == "check_coupon":
+                return {"coupon_code": request.get("coupon_code")}
+            return {}
 
         def log(request: dict | None, next_step: str, *, planned_tool: str | None = None,
                 asked: str | None = None) -> None:
-            cp1.append({"request_id": request["id"] if request else None,
+            cp1.append({"turn": turn,
+                        "request_id": request["id"] if request else None,
                         "intent": request["intent"] if request else None,
                         "next_step": next_step, "planned_tool": planned_tool,
+                        "arguments": tool_arguments(planned_tool, request) if planned_tool else None,
                         "asked": asked})
 
         def ask(request: dict, text: str, asked: str) -> None:
@@ -251,7 +291,8 @@ def build_graph(
             log(request, "reply", asked=asked)
 
         def close(request: dict, outcome: str, reason: str, message: str,
-                  rule_id: str | None = None) -> None:
+                  rule_id: str | None = None,
+                  facts_used: dict[str, Any] | None = None) -> None:
             request["status"] = outcome
             parts.append(message)
             policy_gate.record_outcome(
@@ -260,8 +301,9 @@ def build_graph(
                 reason_code=reason, customer_id=customer_id,
                 order_id=request.get("order_id"), policy_rule_id=rule_id,
             )
-            cp2.append({"request_id": request["id"], "intent": request["intent"],
-                        "decision": outcome, "rule_id": rule_id, "reason_code": reason})
+            cp2.append({"turn": turn, "request_id": request["id"], "intent": request["intent"],
+                        "decision": outcome, "rule_id": rule_id, "reason_code": reason,
+                        "facts_used": facts_used or {}})
 
         # Tell the customer right away about requests we cannot handle, rather
         # than after the current request is finished.
@@ -358,11 +400,11 @@ def build_graph(
             if decision.kind == "decline":
                 close(request, "declined", decision.reason_code or "policy_decline",
                       decision.message or "I'm sorry, I can't do that under our policy.",
-                      decision.rule_id)
+                      decision.rule_id, decision.facts_used)
                 continue
             if decision.kind == "handoff":
                 close(request, "handoff", decision.reason_code or "policy_handoff",
-                      HANDOFF_MESSAGE, decision.rule_id)
+                      HANDOFF_MESSAGE, decision.rule_id, decision.facts_used)
                 continue
 
             # 6. Options: offer, then wait for a choice and an explicit yes.
@@ -373,9 +415,11 @@ def build_graph(
                                selected_option_id=None, confirmation=None)
                 parts.append(_offer_text(offered))
                 log(request, "reply", asked="choose_and_confirm")
-                cp2.append({"request_id": request["id"], "intent": request["intent"],
-                            "decision": "options", "rule_id": decision.rule_id,
-                            "options": [o["option_id"] for o in offered]})
+                cp2.append({"turn": turn, "request_id": request["id"],
+                            "intent": request["intent"], "decision": "options",
+                            "rule_id": decision.rule_id, "facts_used": decision.facts_used,
+                            "options": [{k: o[k] for k in ("option_id", "action", "payload")}
+                                        for o in offered]})
                 break
             ids = [o["option_id"] for o in offered]
             selected = request.get("selected_option_id")
@@ -472,8 +516,11 @@ def build_graph(
                     order_id=request.get("order_id"),
                 )
         request["outcome"] = result
-        cp2.append({"request_id": request["id"], "intent": request["intent"],
-                    "decision": "authorize", "option_id": option["option_id"],
+        cp2.append({"turn": _turn(state), "request_id": request["id"],
+                    "intent": request["intent"], "decision": "authorize",
+                    "option_id": option["option_id"], "action": option["action"],
+                    "payload": option["payload"],
+                    "confirmed": request.get("confirmation") == "yes",
                     "gate_outcome": result["outcome"] if result else "handoff",
                     "reason_code": result["reason_code"] if result else "invalid_option",
                     "rule_id": result["policy_rule_id"] if result else None})

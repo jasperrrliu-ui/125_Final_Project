@@ -193,6 +193,7 @@ def run_case(case: dict[str, Any], graph: Any, ledger: ActionLedger) -> dict[str
         "expected": expected,
         "actual": actual,
         "transcript": transcript,
+        "extract_events": result.get("extract_events", []),
         "cp1_events": result.get("cp1_events", []),
         "cp2_events": result.get("cp2_events", []),
     }
