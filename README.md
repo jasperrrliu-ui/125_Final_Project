@@ -13,6 +13,7 @@ and coupon checkout attempts. No action changes a real store or payment system.
 | [`raw_data/`](raw_data/README.md) | Unmodified ABCD files and source provenance. |
 | [`processed_data/`](processed_data/README.md) | The complete raw-to-processed data lineage, 808-customer simulation, SQLite schema, and policy v1. |
 | [`agent/`](agent/README.md) | LangGraph workflow, policy engine, read-only business tools, policy gate, simulated action ledger, and local coupon Oracle. |
+| [`evaluation/`](evaluation/README.md) | CP1, CP2, and full-conversation test cases built from the synthetic database, and the harness that runs them. |
 | [`docs/POLICY_V1.md`](docs/POLICY_V1.md) | Policy v1 (generated from `processed_data/policy/policy_v1.json`, the single source of truth). |
 | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) | Current workflow and the two business evaluation checkpoints. |
 | [`docs/STATUS.md`](docs/STATUS.md) | Implemented components, verified results, limitations, and next work. |
@@ -46,7 +47,7 @@ Use Python 3.11+ from the repository root. On Windows PowerShell:
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[llm]"
 .\.venv\Scripts\python -m agent.retail_graph.smoke_agent --scripted
-.\.venv\Scripts\python -m unittest -q agent.action_log.test_action_ledger agent.action_log.test_policy_gate agent.policy.test_engine agent.retail_tools.test_read_tools agent.retail_tools.test_check_coupon agent.retail_graph.test_graph agent.oracle_demo.test_core
+.\.venv\Scripts\python -m unittest -q agent.action_log.test_action_ledger agent.action_log.test_policy_gate agent.policy.test_engine agent.retail_tools.test_read_tools agent.retail_tools.test_check_coupon agent.retail_graph.test_graph agent.oracle_demo.test_core evaluation.test_cases
 ```
 
 The scripted smoke runs ten multi-turn conversations covering all eight

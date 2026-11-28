@@ -58,3 +58,18 @@ from the synthetic database instead. The removed files remain in Git history.
 
 Next: evaluation harness and cases; chat UI.
 
+## 2026-11-28: evaluation cases
+
+* `evaluation/` holds 120 cases built from test- and dev-split orders:
+  60 CP1, 40 CP2 (every policy rule covered), and 20 full-conversation
+  scripts. Expected results are derived by running each case's expected
+  extraction through the graph, and the build checks them against what each
+  case was written to test.
+* CP2 and conversation expectations are **provisional** (from the engine)
+  until reference labels from the guidelines alone are reviewed.
+* **Checks**: `evaluation.test_cases` replays all cases; agent unit tests
+  and the scripted smoke run still pass.
+
+Next: model runner and scorer for the cases; CP2 reference labels; simulated
+customer; chat UI.
+

@@ -16,4 +16,4 @@ dependencies = [
 llm = ["langchain-openai>=1,<2"]
 
 [tool.setuptools.packages.find]
-include = ["agent*"]
+include = ["agent*", "evaluation*"]
