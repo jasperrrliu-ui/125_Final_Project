@@ -71,6 +71,31 @@ class RetailGraphTests(unittest.TestCase):
         tools = [e["planned_tool"] for e in done["cp1_events"] if e["planned_tool"]]
         self.assertEqual(tools, ["verify_customer", "lookup_order"])
 
+    def test_events_record_turns_extraction_arguments_and_facts(self):
+        for text in ("cancel", "id", "order", "yes"):
+            done = self.send("t9", text)
+
+        extracts = done["extract_events"]
+        self.assertEqual([e["turn"] for e in extracts], [1, 2, 3, 4])
+        self.assertEqual(extracts[0]["raised_request_ids"], ["r1"])
+        self.assertEqual(extracts[2]["parsed"], {"fields": {"order_id": "0066041981"}})
+        self.assertEqual(extracts[2]["applied_to_request_id"], "r1")
+
+        queries = [e for e in done["cp1_events"] if e["planned_tool"]]
+        self.assertEqual([(e["turn"], e["planned_tool"], e["arguments"]) for e in queries],
+                         [(2, "verify_customer", FELIX),
+                          (3, "lookup_order", {"order_id": "0066041981"})])
+
+        offer, action = done["cp2_events"]
+        self.assertEqual((offer["turn"], offer["decision"]), (3, "options"))
+        self.assertEqual(offer["facts_used"],
+                         {"shipping_status": {"value": "order received", "source": "system"}})
+        self.assertTrue(all({"option_id", "action", "payload"} <= set(o)
+                            for o in offer["options"]))
+        self.assertEqual((action["turn"], action["decision"], action["confirmed"]),
+                         (4, "authorize", True))
+        self.assertEqual(action["payload"], offer["options"][0]["payload"])
+
     def test_account_id_alone_is_not_identity(self):
         self.send("t2", "cancel")
         result = self.send("t2", "account only")

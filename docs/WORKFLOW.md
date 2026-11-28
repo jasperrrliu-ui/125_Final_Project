@@ -52,16 +52,115 @@ request moves on to the next one in the same turn.
 
 ## What is recorded
 
+Every event carries `turn`, the 1-based index of the customer message it
+belongs to, so an evaluation can line events up with the conversation.
+
+* `extract_events`: one entry per customer message: the message, what the
+  model extracted (`parsed`), the requests it raised, and the request its
+  details were applied to. This is the only place the model's own output is
+  recorded.
 * `cp1_events`: one entry each time `route` ends a step: request, intent,
-  next step, planned tool, and what was asked.
-* `cp2_events`: each policy decision (options with rule ID, decline, handoff)
-  and each authorization result.
+  next step, planned tool with its `arguments`, and what was asked
+  (`identity`, `order_id`, `item`, `coupon_code`, `facts:<names>`,
+  `choose_and_confirm`, `confirm`).
+* `cp2_events`: each policy decision and each authorization:
+  * `options`: rule ID, `facts_used` (value and source of every fact the
+    rule read), and each option's `option_id`, `action`, and `payload`;
+  * `declined` / `handoff`: rule ID, reason code, `facts_used`;
+  * `customer_declined`: the customer said no or withdrew;
+  * `authorize`: chosen option, action, payload, `confirmed`, and the gate's
+    outcome, reason code, and rule ID.
 * Ledger (`action_events_v2`): exactly one final row per request:
   `simulated`, `blocked`, `declined`, `customer_declined`, or `handoff`, with
   the policy rule ID and policy version.
 
-Labels and evaluation runs for CP1/CP2/full conversations are the next phase;
-these records are what they will read.
+## Evaluation design
+
+`route` and the policy engine are deterministic: the same state always gives
+the same next step and decision. The model in `understand` is the only part
+that can vary, so both checkpoints are defined around what the model reads
+and what that leads to.
+
+### CP1: information gathering
+
+*When:* each time the agent is about to query a tool or ask the customer.
+
+*Question:* did the model read the identity, request, order, item, or
+coupon correctly, and did that lead to the right tool with the right
+arguments, or the right question?
+
+*Reads:* `extract_events`, `cp1_events`.
+
+*Metrics:* extraction accuracy per field; next-step accuracy (step, tool,
+arguments, or `asked`).
+
+### CP2: decision and action
+
+*When:* each time the policy engine reaches a decision (options, decline,
+handoff), and each time an action is about to be written.
+
+*Question:* given the **true** facts of the case, which decision should the
+policy reach, and did the agent reach it? Was an action executed only for the
+option the customer actually chose, only after an explicit yes, with the
+exact payload?
+
+*Model's role here:* reading the customer's answers to policy questions
+(receipt, purchase date), the option choice, and yes/no.
+
+*Reads:* `extract_events`, `cp2_events`, the ledger.
+
+*Metrics:* decision accuracy (kind and rule); payload exact match;
+**unconfirmed actions** (an action written without a real yes; target 0);
+unnecessary handoffs.
+
+A CP2 failure has one of three causes, and the case records separate them:
+the policy transcription is wrong (the reference label and the engine
+disagree on the true facts), a fact was misread, or consent was misread.
+
+### Full conversations
+
+A model plays the customer from a case script (identity, order, request,
+hidden facts such as having a receipt, and preferences such as which option
+to pick or whether to back out) and talks to the agent until the requests
+are closed or a turn limit is reached. Score: final ledger rows against the
+expected outcome. Failures are traced back to the CP1 or CP2 event where
+they started. `customer_simulation/rewritten_conversations.jsonl` can seed
+the simulated customer's style; `multi_request_cases.jsonl` gives openers
+with several requests.
+
+### Cases
+
+CP1 and CP2 cases start from a LangGraph checkpoint: a scripted conversation
+is run up to a chosen point (for example, options just offered), and the case
+forks from that state with one new customer message. Each case records:
+
+* the synthetic customer, order, and intent;
+* the **true facts** (including ones only the customer knows) and the
+  customer's real intent for this message;
+* the stop point and the new message;
+* expected extraction, expected next step (CP1), and expected decision and
+  action (CP2).
+
+Messages vary: plain answers, paraphrases, vague replies ("I think so?"),
+corrections (a different order ID), two requests in one message, backing out,
+and attempts to override records ("I'm a Gold member", when the record says
+Silver).
+
+### Labels
+
+* CP1 and full-conversation labels follow from how the case was built
+  (the intended content of each message); a person spot-checks them.
+* CP2 reference decisions are produced by a model that reads only
+  `raw_data/guidelines.json` and the true facts, not `policy_v1.json` or the
+  engine. Where it disagrees with the engine, a person decides. This review
+  is also the review of policy v1; once settled, those cases become unit
+  tests for the policy file.
+* The labeling model should differ from the agent's model.
+
+Target size: about 120 cases across the eight intents (roughly 60 CP1,
+40 CP2, 20 full conversations). Where time allows, the CP2 cases are also run
+against the 2026-11-08 backend (commit `0403464`), in which the model chose
+the action, as a baseline.
 
 ## Known limits
 
